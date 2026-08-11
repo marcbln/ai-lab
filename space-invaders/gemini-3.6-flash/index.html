@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alien Invasion: City Destroyer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #060412;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            pointer-events: none;
+            z-index: 10;
+        }
+        h1 {
+            margin: 0 0 4px 0;
+            font-size: 26px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #00f0ff;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.6), 0 0 20px rgba(0, 240, 255, 0.3);
+        }
+        p {
+            margin: 0;
+            font-size: 13px;
+            color: #a0a5c0;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+        }
+        /* Custom styling for lil-gui */
+        .lil-gui {
+            --background-color: rgba(10, 6, 24, 0.88) !important;
+            --text-color: #d0d5ff !important;
+            --title-background-color: #160a2e !important;
+            --widget-color: #241445 !important;
+            --hover-color: #3b206e !important;
+            --focus-color: #00f0ff !important;
+            --number-color: #00f0ff !important;
+            --string-color: #ff007f !important;
+            font-family: monospace !important;
+            border: 1px solid rgba(0, 240, 255, 0.3) !important;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8), 0 0 10px rgba(0, 240, 255, 0.2) !important;
+            border-radius: 8px !important;
+            overflow: hidden !important;
+        }
+        .lil-gui .title {
+            font-weight: bold !important;
+            letter-spacing: 1px !important;
+            color: #00f0ff !important;
+        }
+    </style>
+
+    <!-- CDN Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+</head>
+<body>
+
+    <div id="ui-overlay">
+        <h1>Alien Invasion</h1>
+        <p>CLICK BUILDING TO TARGET LASER • DRAG TO ROTATE CAMERA</p>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script>
+        // ===================================================================
+        // 1. SCENE SETUP & GLOBALS
+        // ===================================================================
+        const container = document.getElementById('canvas-container');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060412);
+        scene.fog = new THREE.FogExp2(0x060412, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(45, 35, 65);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.02; // Don't clip under ground
+        controls.minDistance = 10;
+        controls.maxDistance = 150;
+        controls.target.set(0, 5, 0);
+
+        const clock = new THREE.Clock();
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // Groups
+        const cityGroup = new THREE.Group();
+        scene.add(cityGroup);
+
+        let activeBuildings = [];
+        let isTransitioning = false;
+
+        // UI Parameters
+        const params = {
+            city: 'New York',
+            intensity: 0,
+            resetCity: () => resetCurrentCity(),
+            armageddon: () => triggerArmageddon()
+        };
+
+        // ===================================================================
+        // 2. LIGHTING & ENVIRONMENT
+        // ===================================================================
+        const ambientLight = new THREE.AmbientLight(0x201538, 1.2);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0x00f0ff, 0.8);
+        dirLight1.position.set(50, 40, 30);
+        dirLight1.castShadow = true;
+        dirLight1.shadow.mapSize.width = 2048;
+        dirLight1.shadow.mapSize.height = 2048;
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0xff0055, 0.5);
+        dirLight2.position.set(-50, 20, -30);
+        scene.add(dirLight2);
+
+        // Ground Plane
+        const groundGeo = new THREE.PlaneGeometry(300, 300);
+        const groundMat = new THREE.MeshStandardMaterial({ 
+            color: 0x080614, 
+            roughness: 0.8, 
+            metalness: 0.5 
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Cyberpunk Ground Grid
+        const gridHelper = new THREE.GridHelper(300, 60, 0xff0055, 0x00f0ff);
+        gridHelper.position.y = 0.05;
+        gridHelper.material.opacity = 0.25;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
+
+        // ===================================================================
+        // 3. PROCEDURAL TEXTURES & MATERIALS
+        // ===================================================================
+        function generateWindowTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#0a0a12';
+            ctx.fillRect(0, 0, 256, 512);
+
+            const cols = 16;
+            const rows = 32;
+            const padX = 3;
+            const padY = 4;
+            const w = (256 / cols) - padX;
+            const h = (512 / rows) - padY;
+
+            const palette = ['#00f0ff', '#ff007f', '#ffe600', '#00ff88', '#ffffff'];
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() > 0.45) {
+                        ctx.fillStyle = palette[Math.floor(Math.random() * palette.length)];
+                        ctx.fillRect(c * (w + padX) + padX/2, r * (h + padY) + padY/2, w, h);
+                    } else {
+                        ctx.fillStyle = '#121220';
+                        ctx.fillRect(c * (w + padX) + padX/2, r * (h + padY) + padY/2, w, h);
+                    }
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }
+
+        const windowTexture = generateWindowTexture();
+        const buildingMaterial = new THREE.MeshStandardMaterial({
+            color: 0x111325,
+            roughness: 0.3,
+            metalness: 0.7,
+            map: windowTexture,
+            emissiveMap: windowTexture,
+            emissive: new THREE.Color(0xffffff),
+            emissiveIntensity: 0.8
+        });
+
+        const charMaterial = new THREE.MeshStandardMaterial({
+            color: 0x050505,
+            roughness: 0.9,
+            metalness: 0.1,
+            emissive: new THREE.Color(0xff2200),
+            emissiveIntensity: 0.2
+        });
+
+        // ===================================================================
+        // 4. MOTHERSHIP & WEAPON EFFECTS
+        // ===================================================================
+        const mothershipGroup = new THREE.Group();
+        mothershipGroup.position.set(0, 42, 0);
+        scene.add(mothershipGroup);
+
+        // Core Saucer Geometry
+        const saucerGeo = new THREE.CylinderGeometry(14, 10, 2.5, 32);
+        const saucerMat = new THREE.MeshStandardMaterial({ color: 0x151520, metalness: 0.9, roughness: 0.2 });
+        const saucer = new THREE.Mesh(saucerGeo, saucerMat);
+        saucer.castShadow = true;
+        mothershipGroup.add(saucer);
+
+        // Neon Glow Rings
+        const ringGeo = new THREE.TorusGeometry(14.2, 0.4, 16, 64);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+        const glowRing = new THREE.Mesh(ringGeo, ringMat);
+        glowRing.rotation.x = Math.PI / 2;
+        mothershipGroup.add(glowRing);
+
+        const innerRingGeo = new THREE.TorusGeometry(8, 0.3, 16, 64);
+        const innerRingMat = new THREE.MeshBasicMaterial({ color: 0xff007f });
+        const innerGlowRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+        innerGlowRing.rotation.x = Math.PI / 2;
+        innerGlowRing.position.y = -0.5;
+        mothershipGroup.add(innerGlowRing);
+
+        // Bottom Weapon Core
+        const coreGeo = new THREE.SphereGeometry(2.5, 32, 16);
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+        const weaponCore = new THREE.Mesh(coreGeo, coreMat);
+        weaponCore.position.y = -1.2;
+        mothershipGroup.add(weaponCore);
+
+        // Laser Mesh Construction
+        const laserGroup = new THREE.Group();
+        scene.add(laserGroup);
+        laserGroup.visible = false;
+
+        const laserCoreGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 16);
+        laserCoreGeo.translate(0, 0.5, 0);
+        const laserCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const laserCore = new THREE.Mesh(laserCoreGeo, laserCoreMat);
+
+        const laserGlowGeo = new THREE.CylinderGeometry(1.2, 1.2, 1, 16);
+        laserGlowGeo.translate(0, 0.5, 0);
+        const laserGlowMat = new THREE.MeshBasicMaterial({ 
+            color: 0x00f0ff, 
+            transparent: true, 
+            opacity: 0.6, 
+            blending: THREE.AdditiveBlending 
+        });
+        const laserGlow = new THREE.Mesh(laserGlowGeo, laserGlowMat);
+        laserGroup.add(laserCore, laserGlow);
+
+        // Impact Ring Effect
+        const impactGeo = new THREE.RingGeometry(0.1, 4, 32);
+        const impactMat = new THREE.MeshBasicMaterial({ 
+            color: 0x00f0ff, 
+            side: THREE.DoubleSide, 
+            transparent: true, 
+            opacity: 0, 
+            blending: THREE.AdditiveBlending 
+        });
+        const impactRing = new THREE.Mesh(impactGeo, impactMat);
+        impactRing.rotation.x = -Math.PI / 2;
+        scene.add(impactRing);
+
+        const impactLight = new THREE.PointLight(0x00f0ff, 0, 30);
+        scene.add(impactLight);
+
+        // ===================================================================
+        // 5. PARTICLE SYSTEM (EXPLOSIONS & SMOKE)
+        // ===================================================================
+        const MAX_PARTICLES = 1500;
+        const particleGeo = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(MAX_PARTICLES * 3);
+        const particleVelocities = new Float32Array(MAX_PARTICLES * 3);
+        const particleColors = new Float32Array(MAX_PARTICLES * 3);
+        const particleSizes = new Float32Array(MAX_PARTICLES);
+        const particleAges = new Float32Array(MAX_PARTICLES);
+        const particleMaxAges = new Float32Array(MAX_PARTICLES);
+
+        // Initialize dead particles
+        for(let i=0; i<MAX_PARTICLES; i++) {
+            particleAges[i] = 99999;
+        }
+
+        particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+        particleGeo.setAttribute('size', new THREE.BufferAttribute(particleSizes, 1));
+
+        const particleMat = new THREE.PointsMaterial({
+            size: 1.2,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const particleSystem = new THREE.Points(particleGeo, particleMat);
+        scene.add(particleSystem);
+
+        function spawnExplosion(pos) {
+            let pIndex = 0;
+            const count = 120; // Particles per explosion
+            
+            for (let i = 0; i < MAX_PARTICLES && pIndex < count; i++) {
+                if (particleAges[i] > particleMaxAges[i]) {
+                    // Activate particle
+                    particlePositions[i * 3] = pos.x + (Math.random() - 0.5) * 2;
+                    particlePositions[i * 3 + 1] = pos.y + Math.random() * 2;
+                    particlePositions[i * 3 + 2] = pos.z + (Math.random() - 0.5) * 2;
+
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI * 0.5; // Upward hemisphere
+                    const speed = 8 + Math.random() * 15;
+
+                    particleVelocities[i * 3] = Math.cos(theta) * Math.sin(phi) * speed;
+                    particleVelocities[i * 3 + 1] = Math.cos(phi) * speed + 2;
+                    particleVelocities[i * 3 + 2] = Math.sin(theta) * Math.sin(phi) * speed;
+
+                    // Initial color: fiery bright yellow/orange
+                    particleColors[i * 3] = 1.0;
+                    particleColors[i * 3 + 1] = 0.5 + Math.random() * 0.5;
+                    particleColors[i * 3 + 2] = 0.1;
+
+                    particleSizes[i] = 1.0 + Math.random() * 2.0;
+                    particleAges[i] = 0;
+                    particleMaxAges[i] = 0.8 + Math.random() * 0.8;
+
+                    pIndex++;
+                }
+            }
+            particleGeo.attributes.position.needsUpdate = true;
+            particleGeo.attributes.color.needsUpdate = true;
+        }
+
+        function updateParticles(dt) {
+            let needsUpdate = false;
+            for (let i = 0; i < MAX_PARTICLES; i++) {
+                if (particleAges[i] <= particleMaxAges[i]) {
+                    particleAges[i] += dt;
+                    
+                    // Physics integration
+                    particlePositions[i * 3] += particleVelocities[i * 3] * dt;
+                    particlePositions[i * 3 + 1] += particleVelocities[i * 3 + 1] * dt;
+                    particlePositions[i * 3 + 2] += particleVelocities[i * 3 + 2] * dt;
+
+                    // Gravity & Drag
+                    particleVelocities[i * 3 + 1] -= 9.8 * dt;
+                    particleVelocities[i * 3] *= 0.95;
+                    particleVelocities[i * 3 + 2] *= 0.95;
+
+                    // Fade color from Yellow -> Red -> Dark Smoke
+                    const lifeRatio = particleAges[i] / particleMaxAges[i];
+                    particleColors[i * 3] = Math.max(0, 1.0 - lifeRatio);
+                    particleColors[i * 3 + 1] = Math.max(0, 0.6 - lifeRatio * 0.8);
+                    particleColors[i * 3 + 2] = 0.05;
+
+                    needsUpdate = true;
+                } else {
+                    // Hide dead particle
+                    particlePositions[i * 3 + 1] = -9999;
+                }
+            }
+            if (needsUpdate) {
+                particleGeo.attributes.position.needsUpdate = true;
+                particleGeo.attributes.color.needsUpdate = true;
+            }
+        }
+
+        // ===================================================================
+        // 6. PROCEDURAL CITY GENERATOR
+        // ===================================================================
+        class CityGenerator {
+            static clear() {
+                activeBuildings.forEach(b => {
+                    cityGroup.remove(b.mesh);
+                    if (b.mesh.geometry) b.mesh.geometry.dispose();
+                });
+                activeBuildings = [];
+                while(cityGroup.children.length > 0){ 
+                    const obj = cityGroup.children[0];
+                    cityGroup.remove(obj); 
+                }
+            }
+
+            static createBuildingMesh(width, height, depth, x, z) {
+                const geo = new THREE.BoxGeometry(width, height, depth);
+                geo.translate(0, height / 2, 0); // Origin at bottom base
+
+                // Adjust texture repeat according to building dimensions
+                const mat = buildingMaterial.clone();
+                mat.map = windowTexture.clone();
+                mat.emissiveMap = mat.map;
+                mat.map.repeat.set(Math.max(1, Math.floor(width / 2)), Math.max(1, Math.floor(height / 3)));
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, 0, z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // Add rooftop antenna detailing
+                if (height > 12 && Math.random() > 0.4) {
+                    const antGeo = new THREE.CylinderGeometry(0.08, 0.08, height * 0.25);
+                    const antMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+                    const antenna = new THREE.Mesh(antGeo, antMat);
+                    antenna.position.set(0, height + (height * 0.125), 0);
+                    mesh.add(antenna);
+                }
+
+                const buildingObj = {
+                    mesh: mesh,
+                    originalScaleY: 1,
+                    targetHeight: height,
+                    baseY: 0,
+                    x: x,
+                    z: z,
+                    destroyed: false
+                };
+
+                mesh.userData = buildingObj;
+                cityGroup.add(mesh);
+                activeBuildings.push(buildingObj);
+
+                // Animate Spawning Growth
+                mesh.scale.y = 0.001;
+                gsap.to(mesh.scale, {
+                    y: 1,
+                    duration: 0.8 + Math.random() * 0.6,
+                    delay: Math.random() * 0.4,
+                    ease: "back.out(1.2)"
+                });
+
+                return buildingObj;
+            }
+
+            static generateNewYork() {
+                this.clear();
+                const gridSize = 10;
+                const spacing = 4.2;
+                const offset = (gridSize * spacing) / 2;
+
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const x = i * spacing - offset;
+                        const z = j * spacing - offset;
+
+                        // Leave center free for Empire State Building landmark
+                        if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+
+                        const w = 2.2 + Math.random() * 1.2;
+                        const d = 2.2 + Math.random() * 1.2;
+                        const h = 8 + Math.random() * 22;
+
+                        this.createBuildingMesh(w, h, d, x, z);
+                    }
+                }
+
+                // Empire State Style Central Landmark
+                const esbGroup = new THREE.Group();
+                esbGroup.position.set(0, 0, 0);
+
+                const t1 = new THREE.Mesh(new THREE.BoxGeometry(6, 12, 6), buildingMaterial);
+                t1.position.y = 6;
+                const t2 = new THREE.Mesh(new THREE.BoxGeometry(4.2, 12, 4.2), buildingMaterial);
+                t2.position.y = 18;
+                const t3 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 8, 2.5), buildingMaterial);
+                t3.position.y = 28;
+                const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.5, 10), new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
+                spire.position.y = 37;
+
+                esbGroup.add(t1, t2, t3, spire);
+                
+                // Wrap landmark into interactable building system
+                const landmarkObj = {
+                    mesh: esbGroup,
+                    originalScaleY: 1,
+                    targetHeight: 42,
+                    baseY: 0,
+                    x: 0, z: 0,
+                    destroyed: false
+                };
+                
+                // Prepare child meshes to handle destruction styling
+                esbGroup.traverse(c => { if(c.isMesh) { c.castShadow = true; c.userData = landmarkObj; } });
+                esbGroup.userData = landmarkObj;
+                cityGroup.add(esbGroup);
+                activeBuildings.push(landmarkObj);
+
+                esbGroup.scale.y = 0.001;
+                gsap.to(esbGroup.scale, { y: 1, duration: 1.2, ease: "power2.out" });
+            }
+
+            static generateParis() {
+                this.clear();
+                const rings = 4;
+                
+                // Low-rise Haussmann style surrounding structures
+                for (let r = 2; r <= rings; r++) {
+                    const count = r * 8;
+                    const radius = r * 7;
+                    for (let i = 0; i < count; i++) {
+                        const angle = (i / count) * Math.PI * 2;
+                        const x = Math.cos(angle) * radius + (Math.random() - 0.5) * 2;
+                        const z = Math.sin(angle) * radius + (Math.random() - 0.5) * 2;
+
+                        const w = 3.5 + Math.random() * 1.5;
+                        const d = 3.5 + Math.random() * 1.5;
+                        const h = 3 + Math.random() * 3.5; // Uniform low height
+
+                        this.createBuildingMesh(w, h, d, x, z);
+                    }
+                }
+
+                // Procedural Eiffel Tower Landmark
+                const eiffel = new THREE.Group();
+                const eMat = new THREE.MeshStandardMaterial({ color: 0xff007f, wireframe: true, emissive: 0xff0055, emissiveIntensity: 0.5 });
+
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(4, 7, 8, 4), eMat);
+                base.position.y = 4;
+                const mid = new THREE.Mesh(new THREE.CylinderGeometry(2, 4, 10, 4), eMat);
+                mid.position.y = 13;
+                const top = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 2, 14, 4), eMat);
+                top.position.y = 25;
+                const topLight = new THREE.Mesh(new THREE.SphereGeometry(0.8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                topLight.position.y = 32;
+
+                eiffel.add(base, mid, top, topLight);
+
+                const landmarkObj = {
+                    mesh: eiffel,
+                    originalScaleY: 1,
+                    targetHeight: 32,
+                    baseY: 0,
+                    x: 0, z: 0,
+                    destroyed: false
+                };
+
+                eiffel.traverse(c => { if(c.isMesh) { c.userData = landmarkObj; } });
+                eiffel.userData = landmarkObj;
+                cityGroup.add(eiffel);
+                activeBuildings.push(landmarkObj);
+
+                eiffel.scale.y = 0.001;
+                gsap.to(eiffel.scale, { y: 1, duration: 1.2, ease: "power2.out" });
+            }
+
+            static generateBerlin() {
+                this.clear();
+                const gridSize = 8;
+                const spacing = 5.5;
+                const offset = (gridSize * spacing) / 2;
+
+                for (let i = 0; i < gridSize; i++) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const x = i * spacing - offset;
+                        const z = j * spacing - offset;
+
+                        if (Math.abs(x) < 6 && Math.abs(z) < 6) continue;
+
+                        // Blocky Brutalist mix
+                        const w = 3 + Math.random() * 2.5;
+                        const d = 3 + Math.random() * 2.5;
+                        const h = 4 + Math.random() * 10;
+
+                        this.createBuildingMesh(w, h, d, x, z);
+                    }
+                }
+
+                // Berlin TV Tower (Fernsehturm)
+                const tvTower = new THREE.Group();
+                const shaftMat = new THREE.MeshStandardMaterial({ color: 0x8899a6, roughness: 0.4, metalness: 0.6 });
+                const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.8, 22, 16), shaftMat);
+                shaft.position.y = 11;
+
+                const sphereGeo = new THREE.SphereGeometry(3.5, 32, 16);
+                const sphereMat = new THREE.MeshStandardMaterial({ color: 0x00f0ff, metalness: 0.9, roughness: 0.1, emissive: 0x00aaff, emissiveIntensity: 0.3 });
+                const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+                sphere.position.y = 22;
+
+                const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.6, 14, 16), new THREE.MeshBasicMaterial({ color: 0xff0055 }));
+                spire.position.y = 32;
+
+                tvTower.add(shaft, sphere, spire);
+
+                const landmarkObj = {
+                    mesh: tvTower,
+                    originalScaleY: 1,
+                    targetHeight: 39,
+                    baseY: 0,
+                    x: 0, z: 0,
+                    destroyed: false
+                };
+
+                tvTower.traverse(c => { if(c.isMesh) { c.userData = landmarkObj; } });
+                tvTower.userData = landmarkObj;
+                cityGroup.add(tvTower);
+                activeBuildings.push(landmarkObj);
+
+                tvTower.scale.y = 0.001;
+                gsap.to(tvTower.scale, { y: 1, duration: 1.2, ease: "power2.out" });
+            }
+        }
+
+        // Initialize Default City
+        CityGenerator.generateNewYork();
+
+        // ===================================================================
+        // 7. ATTACK & DESTRUCTION LOGIC
+        // ===================================================================
+        function fireLaserAt(buildingObj) {
+            if (!buildingObj || buildingObj.destroyed) return;
+
+            const targetPos = new THREE.Vector3(buildingObj.x, buildingObj.targetHeight * buildingObj.mesh.scale.y, buildingObj.z);
+            const startPos = new THREE.Vector3();
+            weaponCore.getWorldPosition(startPos);
+
+            // Orient Mothership slightly towards target
+            gsap.to(mothershipGroup.rotation, {
+                x: (targetPos.z - mothershipGroup.position.z) * 0.005,
+                z: -(targetPos.x - mothershipGroup.position.x) * 0.005,
+                duration: 0.2,
+                yoyo: true,
+                repeat: 1
+            });
+
+            // Calculate Laser Orientation & Length
+            const distance = startPos.distanceTo(targetPos);
+            laserGroup.position.copy(startPos);
+            laserGroup.lookAt(targetPos);
+            laserGroup.rotateX(Math.PI / 2); // Cylinder aligns with length
+            laserGroup.scale.set(1, distance, 1);
+            laserGroup.visible = true;
+
+            // Flash Core Light
+            weaponCore.material.color.setHex(0xffffff);
+
+            // Trigger Impact Effects
+            impactRing.position.copy(targetPos);
+            impactRing.position.y = 0.1;
+            impactRing.material.opacity = 1;
+            impactRing.scale.set(0.1, 0.1, 0.1);
+
+            impactLight.position.copy(targetPos);
+            impactLight.position.y = 3;
+            impactLight.intensity = 10;
+
+            gsap.to(impactRing.scale, { x: 3, y: 3, z: 3, duration: 0.4, ease: "power2.out" });
+            gsap.to(impactRing.material, { opacity: 0, duration: 0.4 });
+            gsap.to(impactLight, { intensity: 0, duration: 0.5 });
+
+            // Animate Laser Beam Duration
+            gsap.fromTo(laserGlow.scale, { x: 2, z: 2 }, { x: 0.1, z: 0.1, duration: 0.35, onComplete: () => {
+                laserGroup.visible = false;
+                weaponCore.material.color.setHex(0x00f0ff);
+            }});
+
+            // Destroy Building Process
+            spawnExplosion(targetPos);
+            destroyBuilding(buildingObj);
+        }
+
+        function destroyBuilding(buildingObj) {
+            buildingObj.destroyed = true;
+
+            // Shrink building to rubble height
+            gsap.to(buildingObj.mesh.scale, {
+                y: 0.08,
+                duration: 0.6,
+                ease: "bounce.out"
+            });
+
+            // Apply charred material visual swap
+            buildingObj.mesh.traverse(child => {
+                if (child.isMesh) {
+                    child.material = charMaterial;
+                }
+            });
+        }
+
+        function resetCurrentCity() {
+            activeBuildings.forEach(b => {
+                b.destroyed = false;
+                gsap.to(b.mesh.scale, {
+                    y: 1,
+                    duration: 0.8 + Math.random() * 0.4,
+                    ease: "back.out(1.2)"
+                });
+                b.mesh.traverse(child => {
+                    if (child.isMesh) {
+                        child.material = buildingMaterial;
+                    }
+                });
+            });
+        }
+
+        function triggerArmageddon() {
+            const available = activeBuildings.filter(b => !b.destroyed);
+            if (available.length === 0) return;
+
+            // Rapid fire laser bombardment
+            const targets = available.sort(() => 0.5 - Math.random()).slice(0, 12);
+            targets.forEach((target, index) => {
+                gsap.delayedCall(index * 0.12, () => {
+                    fireLaserAt(target);
+                });
+            });
+        }
+
+        function switchCity(cityName) {
+            if (isTransitioning) return;
+            isTransitioning = true;
+
+            // Collapse active buildings down
+            activeBuildings.forEach(b => {
+                gsap.to(b.mesh.scale, { y: 0.001, duration: 0.4, ease: "power2.in" });
+            });
+
+            gsap.delayedCall(0.45, () => {
+                if (cityName === 'New York') CityGenerator.generateNewYork();
+                else if (cityName === 'Paris') CityGenerator.generateParis();
+                else if (cityName === 'Berlin') CityGenerator.generateBerlin();
+                isTransitioning = false;
+            });
+        }
+
+        // ===================================================================
+        // 8. INTERACTIVITY & RAYCASTING
+        // ===================================================================
+        function onPointerDown(event) {
+            // Ignore UI clicks
+            if (event.clientX > window.innerWidth - 260 && event.clientY < 200) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            
+            // Collect all interactive meshes inside cityGroup
+            const intersects = raycaster.intersectObjects(cityGroup.children, true);
+
+            if (intersects.length > 0) {
+                let hitObj = intersects[0].object;
+                while (hitObj.parent && hitObj.parent !== cityGroup && !hitObj.userData.targetHeight) {
+                    hitObj = hitObj.parent;
+                }
+                
+                const buildingData = hitObj.userData;
+                if (buildingData && !buildingData.destroyed) {
+                    fireLaserAt(buildingData);
+                }
+            }
+        }
+
+        window.addEventListener('pointerdown', onPointerDown);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ===================================================================
+        // 9. GUI CONTROLS SETUP
+        // ===================================================================
+        const gui = new lil.GUI({ title: ' invasion Command ' });
+
+        gui.add(params, 'city', ['New York', 'Paris', 'Berlin']).name('Select City').onChange(value => {
+            switchCity(value);
+        });
+
+        gui.add(params, 'intensity', 0, 10, 1).name('Auto Attack').onChange(v => {
+            params.intensity = v;
+        });
+
+        gui.add(params, 'armageddon').name('⚡ ARMAGEDDON');
+        gui.add(params, 'resetCity').name('🔄 Rebuild City');
+
+        // ===================================================================
+        // 10. MAIN ANIMATION & RENDER LOOP
+        // ===================================================================
+        let autoAttackTimer = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = clock.getDelta();
+            const elapsedTime = clock.getElapsedTime();
+
+            controls.update();
+
+            // Mothership Animations
+            mothershipGroup.rotation.y += 0.005;
+            mothershipGroup.position.y = 42 + Math.sin(elapsedTime * 1.5) * 1.2;
+            glowRing.rotation.z = elapsedTime * 0.5;
+            innerGlowRing.rotation.z = -elapsedTime * 0.8;
+
+            // Particle System Physics Update
+            updateParticles(dt);
+
+            // Auto Invasion Logic based on Intensity
+            if (params.intensity > 0) {
+                autoAttackTimer += dt;
+                const threshold = Math.max(0.2, 3.2 - (params.intensity * 0.3));
+                if (autoAttackTimer >= threshold) {
+                    autoAttackTimer = 0;
+                    const available = activeBuildings.filter(b => !b.destroyed);
+                    if (available.length > 0) {
+                        const randomTarget = available[Math.floor(Math.random() * available.length)];
+                        fireLaserAt(randomTarget);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
+
