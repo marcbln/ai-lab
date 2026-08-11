@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ALIEN INVASION — CITY DESTROYER</title>
+<title>CITY DEFENDER 3D</title>
 <link rel="icon" href="data:," />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,44 +22,163 @@
 
   /* ============================ HUD ============================ */
   #hud {
-    position: fixed; top: 26px; left: 30px; z-index: 10;
+    position: fixed; top: 24px; left: 30px; z-index: 10;
     pointer-events: none; user-select: none;
     text-shadow: 0 0 18px rgba(0, 229, 255, .55), 0 0 42px rgba(122, 60, 255, .35);
+    opacity: 0;
   }
   #hud .title {
-    font-size: 27px; font-weight: 900; letter-spacing: 7px;
+    font-size: 22px; font-weight: 900; letter-spacing: 7px;
     background: linear-gradient(90deg, #9adfff, #d9c4ff 55%, #ff8ab0);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent;
     filter: drop-shadow(0 0 16px rgba(122, 60, 255, .85));
   }
-  #hud .subtitle {
-    font-size: 10px; font-weight: 700; letter-spacing: 10px;
-    color: #ff6a8a; margin-top: 5px;
-    text-shadow: 0 0 12px rgba(255, 59, 110, .85);
-  }
   #cityLabel {
-    margin-top: 26px; font-size: 16px; font-weight: 700; letter-spacing: 6px;
+    margin-top: 12px; font-size: 13px; font-weight: 700; letter-spacing: 6px;
     color: #9adfff; text-shadow: 0 0 18px rgba(0, 229, 255, .7);
   }
-  #integrity { margin-top: 9px; font-size: 11px; letter-spacing: 3px; color: #7f8db0; }
-  #integrityVal { color: #6bff9e; text-shadow: 0 0 10px rgba(107, 255, 158, .75); }
+  .hudRow {
+    margin-top: 9px; font-size: 11px; letter-spacing: 3px; color: #7f8db0;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .hudRow .val { color: #6bff9e; text-shadow: 0 0 10px rgba(107, 255, 158, .75); min-width: 64px; }
+  .hudRow .val.score { color: #9adfff; text-shadow: 0 0 10px rgba(0, 229, 255, .8); }
+  .bar {
+    width: 170px; height: 9px;
+    border: 1px solid rgba(0, 229, 255, .45);
+    background: rgba(4, 8, 20, .55);
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, .8);
+    position: relative;
+  }
+  .bar > div {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #00e5ff, #6bff9e);
+    box-shadow: 0 0 12px rgba(0, 229, 255, .8);
+    transition: width .25s ease;
+  }
+  .bar.boss { border-color: rgba(255, 59, 110, .6); width: 220px; }
+  .bar.boss > div { background: linear-gradient(90deg, #ff3b6e, #ff8ab0); box-shadow: 0 0 12px rgba(255, 59, 110, .8); }
+  #highScore { margin-top: 12px; font-size: 10px; letter-spacing: 3px; color: rgba(165, 185, 225, .75); }
+  #stunFlash {
+    position: fixed; top: 24%; left: 50%; transform: translateX(-50%);
+    z-index: 12; pointer-events: none; user-select: none;
+    font-size: 26px; font-weight: 900; letter-spacing: 8px; color: #ff2d2d;
+    text-shadow: 0 0 18px rgba(255, 45, 45, .95), 0 0 60px rgba(255, 45, 45, .5);
+    opacity: 0;
+  }
 
-  #hint {
-    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-    z-index: 10; font-size: 9px; letter-spacing: 4px;
-    color: rgba(165, 185, 225, .55); pointer-events: none; user-select: none;
+  /* ============================ CROSSHAIR ============================ */
+  #crosshair {
+    position: fixed; left: 0; top: 0; z-index: 15;
+    width: 26px; height: 26px; margin: -13px 0 0 -13px;
+    pointer-events: none; user-select: none;
+    opacity: 0;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; inset: 0;
+    border-radius: 50%;
+  }
+  #crosshair::before {
+    border: 1.5px solid rgba(0, 229, 255, .9);
+    box-shadow: 0 0 10px rgba(0, 229, 255, .9), inset 0 0 6px rgba(0, 229, 255, .5);
+  }
+  #crosshair::after {
+    background: radial-gradient(circle, rgba(255, 255, 255, .55) 0 2px, transparent 3px);
+    box-shadow: 0 0 8px rgba(255, 255, 255, .7);
+  }
+  body.playing { cursor: none; }
+  body.playing #crosshair { opacity: 1; }
+
+  /* ============================ MENU ============================ */
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(5, 6, 14, .55) 0%, rgba(4, 5, 12, .88) 100%);
+    backdrop-filter: blur(3px);
+    user-select: none;
+  }
+  #menu h1 {
+    font-size: 54px; font-weight: 900; letter-spacing: 12px;
+    background: linear-gradient(90deg, #9adfff, #d9c4ff 45%, #ff8ab0);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 22px rgba(122, 60, 255, .95));
+    text-align: center; white-space: nowrap;
+  }
+  #menu .tagline {
+    margin-top: 14px; font-size: 11px; font-weight: 700; letter-spacing: 10px;
+    color: #ff6a8a; text-shadow: 0 0 12px rgba(255, 59, 110, .85);
+  }
+  .btn {
+    font-family: 'Orbitron', monospace;
+    background: rgba(10, 14, 30, .72);
+    color: #9adfff;
+    border: 1.5px solid rgba(0, 229, 255, .55);
+    border-radius: 2px;
+    letter-spacing: 4px; font-weight: 700; font-size: 13px;
+    padding: 12px 26px; cursor: pointer;
+    text-shadow: 0 0 8px rgba(0, 229, 255, .6);
+    box-shadow: 0 0 14px rgba(0, 229, 255, .18), inset 0 0 10px rgba(0, 229, 255, .08);
+    transition: all .18s ease;
+  }
+  .btn:hover:not(:disabled) { background: rgba(0, 229, 255, .16); box-shadow: 0 0 22px rgba(0, 229, 255, .5); transform: translateY(-1px); }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .cityBtns { display: flex; gap: 16px; margin-top: 34px; }
+  .cityBtn {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 5px;
+    padding: 13px 22px; cursor: pointer; border-radius: 2px;
+    background: rgba(10, 14, 30, .72);
+    color: #7f8db0; border: 1.5px solid rgba(140, 160, 210, .35);
+    transition: all .18s ease;
+  }
+  .cityBtn:hover { color: #fff; border-color: rgba(154, 223, 255, .8); }
+  .cityBtn.selected {
+    color: #05060e; background: #00e5ff;
+    border-color: #9ae9ff;
+    box-shadow: 0 0 26px rgba(0, 229, 255, .85);
+    text-shadow: 0 0 6px rgba(0, 0, 0, .4);
+  }
+  #menuHighScore { margin-top: 30px; font-size: 12px; letter-spacing: 4px; color: #ffd166; text-shadow: 0 0 12px rgba(255, 209, 102, .6); }
+  #startBtn { margin-top: 30px; font-size: 16px; padding: 16px 48px; letter-spacing: 8px; }
+  #menuHint { margin-top: 40px; font-size: 9px; letter-spacing: 4px; color: rgba(165, 185, 225, .55); text-align: center; line-height: 2.2; }
+
+  /* ============================ WAVE BANNER ============================ */
+  #waveBanner {
+    position: fixed; top: 32%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 14; pointer-events: none; user-select: none; text-align: center;
+    opacity: 0;
+  }
+  #waveBannerText {
+    display: block; font-size: 44px; font-weight: 900; letter-spacing: 14px;
+    color: #9adfff; text-shadow: 0 0 26px rgba(0, 229, 255, .9), 0 0 70px rgba(122, 60, 255, .5);
     white-space: nowrap;
   }
-
-  #victory {
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 20; pointer-events: none; user-select: none;
-    font-size: 42px; font-weight: 900; letter-spacing: 12px; white-space: nowrap;
-    color: #ff5d7a; opacity: 0;
-    text-shadow: 0 0 22px rgba(255, 59, 110, .95), 0 0 70px rgba(255, 59, 110, .45);
+  #waveBannerSub {
+    display: block; margin-top: 12px; font-size: 11px; letter-spacing: 8px;
+    color: #ff6a8a; text-shadow: 0 0 12px rgba(255, 59, 110, .85);
   }
+
+  /* ============================ END SCREENS ============================ */
+  #screen { opacity: 0; pointer-events: none; }
+  #screen.show { opacity: 1; pointer-events: auto; }
+  #screen h2 {
+    font-size: 46px; font-weight: 900; letter-spacing: 12px; white-space: nowrap;
+  }
+  #screen.gameover h2 { color: #ff5d7a; text-shadow: 0 0 24px rgba(255, 59, 110, .95), 0 0 80px rgba(255, 59, 110, .45); }
+  #screen.victory h2 { color: #6bff9e; text-shadow: 0 0 24px rgba(107, 255, 158, .95), 0 0 80px rgba(107, 255, 158, .45); }
+  #screen .screenRow { margin-top: 20px; font-size: 13px; letter-spacing: 4px; color: #9adfff; }
+  #screen .screenRow span { color: #ffffff; }
+  #screenNewHi {
+    margin-top: 16px; font-size: 13px; font-weight: 900; letter-spacing: 6px;
+    color: #ffd166; text-shadow: 0 0 14px rgba(255, 209, 102, .9);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  #screen .btnRow { display: flex; gap: 18px; margin-top: 36px; }
+  #screen .btn.secondary { border-color: rgba(255, 59, 110, .55); color: #ff8ab0; box-shadow: 0 0 14px rgba(255, 59, 110, .18); }
+  #screen .btn.secondary:hover { background: rgba(255, 59, 110, .16); box-shadow: 0 0 22px rgba(255, 59, 110, .5); }
 
   /* ==================== SCREEN FX OVERLAYS ==================== */
   #vignette {
@@ -71,8 +190,13 @@
     background: repeating-linear-gradient(0deg, rgba(255, 255, 255, .022) 0 1px, transparent 1px 3px);
     mix-blend-mode: overlay;
   }
+  #redFlash {
+    position: fixed; inset: 0; z-index: 7; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 20, 40, 0) 30%, rgba(255, 20, 40, .55) 100%);
+    opacity: 0;
+  }
 
-  /* ====================== lil-gui THEME ======================= */
+  /* ====================== lil-gui THEME (demo mode) ======================= */
   .lil-gui {
     --background-color: rgba(8, 10, 24, .82);
     --title-background-color: rgba(122, 60, 255, .30);
@@ -102,15 +226,53 @@
 
   <!-- ========================= HUD ========================= -->
   <div id="hud">
-    <div class="title">ALIEN INVASION</div>
-    <div class="subtitle">CITY DESTROYER</div>
+    <div class="title">CITY DEFENDER</div>
     <div id="cityLabel">NEW YORK</div>
-    <div id="integrity">STRUCTURAL INTEGRITY: <span id="integrityVal">100%</span></div>
+    <div class="hudRow">SCORE <span class="val score" id="scoreVal">0</span></div>
+    <div class="hudRow">WAVE <span class="val" id="waveVal">1</span> <span id="enemyCount">—</span></div>
+    <div class="hudRow">CITY HP <div class="bar"><div id="cityHpBar"></div></div></div>
+    <div class="hudRow" id="bossRow" style="display:none">BOSS <div class="bar boss"><div id="bossHpBar"></div></div></div>
+    <div id="highScore">HI-SCORE <span id="hiScoreVal">0</span></div>
   </div>
-  <div id="hint">DRAG — ORBIT &nbsp;·&nbsp; SCROLL — ZOOM &nbsp;·&nbsp; CLICK A BUILDING — FIRE</div>
-  <div id="victory">THE ALIENS WON</div>
+  <div id="stunFlash">CANNON STUNNED</div>
+  <div id="crosshair"></div>
+  <div id="waveBanner">
+    <span id="waveBannerText">WAVE 1</span>
+    <span id="waveBannerSub">ENEMIES INBOUND</span>
+  </div>
+
+  <!-- ========================= START MENU ========================= -->
+  <div id="menu" class="overlay">
+    <h1>CITY DEFENDER 3D</h1>
+    <div class="tagline">WAVE SURVIVAL · ARCADE DEFENSE</div>
+    <div class="cityBtns">
+      <button class="cityBtn selected" data-city="New York">NEW YORK</button>
+      <button class="cityBtn" data-city="Paris">PARIS</button>
+      <button class="cityBtn" data-city="Berlin">BERLIN</button>
+    </div>
+    <div id="menuHighScore">HIGH SCORE <span id="menuHiVal">0</span></div>
+    <button id="startBtn" class="btn">START DEFENSE</button>
+    <div id="menuHint">
+      MOUSE — AIM · HOLD LMB — FIRE · DRONE AUTOPILOTS THE PATROL<br />
+      DEFEND THE CITY — DO NOT SHOOT BUILDINGS OR TRAFFIC
+    </div>
+  </div>
+
+  <!-- ========================= END SCREENS ========================= -->
+  <div id="screen" class="overlay">
+    <h2 id="screenTitle">GAME OVER</h2>
+    <div class="screenRow">SCORE <span id="screenScore">0</span></div>
+    <div class="screenRow">HIGH SCORE <span id="screenHi">0</span></div>
+    <div id="screenNewHi" style="display:none">★ NEW HIGH SCORE ★</div>
+    <div class="btnRow">
+      <button id="againBtn" class="btn secondary">MAIN MENU</button>
+      <button id="replayBtn" class="btn">REPLAY CITY</button>
+    </div>
+  </div>
+
   <div id="vignette"></div>
   <div id="scanlines"></div>
+  <div id="redFlash"></div>
 
   <!-- GSAP (classic global build, used by the module below) -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
@@ -127,15 +289,15 @@
 
   <script type="module">
   // ============================================================================
-  //  ALIEN INVASION — CITY DESTROYER
-  //  A single-file WebGL demo: procedural cyberpunk cities, a glowing alien
-  //  mothership and a clickable destruction pipeline (lasers, impact rings,
-  //  particle fire/smoke, crumbling buildings).
+  //  CITY DEFENDER 3D
+  //  A single-file arcade wave-survival game: the player pilots an auto-drone,
+  //  aims with the mouse and defends a procedural cyberpunk city from alien
+  //  waves (Scouts, Bombers, Dive Drones, the Mothership boss).
+  //  Built on the visual DNA of the original "Alien Invasion" demo.
+  //  Play: REGULAR · Demo: /?demo=1 (legacy OrbitControls + lil-gui)
   // ============================================================================
 
   import * as THREE from 'three';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.min.js';
 
   const gsap = window.gsap;
 
@@ -147,8 +309,11 @@
   // travels through the pipeline untouched — deterministic neon styling.
   THREE.ColorManagement.enabled = false;
 
+  const DEMO = new URLSearchParams(location.search).get('demo') === '1';
+  const PRESERVE = new URLSearchParams(location.search).get('preserve') === '1';
+
   // ============================================================================
-  //  CONFIGURATION
+  //  CONFIGURATION — single source of truth for balance
   // ============================================================================
 
   const CONFIG = {
@@ -163,7 +328,23 @@
     maxDots: 8,
     fireMax: 900,
     smokeMax: 600,
+    // ---- game balance (tuned in Phase 6) ----
+    drone: { radiusScale: 1.18, altitude: 70, speed: 55, roll: 0.35 },
+    cam: { dist: 26, up: 8, lookAhead: 14, lerp: 3.2 },
+    fire: { cooldown: 0.12, bulletSpeed: 300, bulletDamage: 1, bulletRange: 900, bulletCount: 48, muzzleOffset: 5 },
+    bomb: { fallSpeed: 26, damage: 60, radius: 0.85, count: 14 },
+    boss: { hp: 900, beamDamage: 90, landmarkBeamDamage: 180, beamTravel: 1.2, telegraph: 0.6, descentY: 58 },
+    stun: { time: 3 },
+    wave: { scalePerWave: 0.12, bannerTime: 2.6, spawnRadius: 235, capOnWave: 2 },
+    scoring: { buildingPenalty: -200, carPenalty: -50 },
   };
+
+  const SCORE_TABLE = Object.freeze({
+    SCOUT: 100, BOMBER: 250, DIVE_DRONE: 150,
+    BOMB_INTERCEPTED: 100, BOSS: 5000,
+    FRIENDLY_BUILDING: CONFIG.scoring.buildingPenalty,
+    FRIENDLY_CAR: CONFIG.scoring.carPenalty,
+  });
 
   // ============================================================================
   //  UTILITIES
@@ -308,13 +489,26 @@
     return tex;
   }
 
+  // custom materials that implement FogExp2 manually
+  const fogMaterials = new Set();
+  function registerFogMaterial(mat) {
+    fogMaterials.add(mat);
+    mat.uniforms.uFogColor.value.copy(scene.fog.color);
+    mat.uniforms.uFogDensity.value = scene.fog.density;
+  }
+
+  function setFogDensity(d) {
+    scene.fog.density = d;
+    for (const m of fogMaterials) {
+      if (m.uniforms.uFogDensity) m.uniforms.uFogDensity.value = d;
+    }
+  }
+
   // ============================================================================
   //  RENDERER / SCENE / CAMERA / CONTROLS
   // ============================================================================
 
-  // ?preserve=1 keeps the drawing buffer (used by headless pixel tests)
-  const preserve = new URLSearchParams(location.search).get('preserve') === '1';
-  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: preserve });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: PRESERVE });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
@@ -324,21 +518,10 @@
   scene.fog = new THREE.FogExp2(CONFIG.fogColor, CONFIG.fogDensity);
 
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 4000);
-  camera.position.set(150, 100, 175);
-
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 22, 0);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
-  controls.minDistance = 30;
-  controls.maxDistance = 420;
-  controls.maxPolarAngle = 1.62; // allow a glimpse under the horizon
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.55;
-  controls.addEventListener('start', () => { controls.autoRotate = false; });
+  camera.position.set(170, 95, 190);
 
   // Everything physical (city, ship, FX) lives in this group so we can do a
-  // cheap camera "shake" without fighting OrbitControls.
+  // cheap camera "shake" without fighting the chase camera.
   const sceneGroup = new THREE.Group();
   scene.add(sceneGroup);
 
@@ -543,8 +726,8 @@
     searchlights.push(unit);
   }
 
-  /** Aim a battery at a wandering point near the mothership so all beams
-   *  converge on the UFO while still sweeping restlessly. */
+  /** Aim a battery at a wandering point near the target so all beams
+   *  converge while still sweeping restlessly. */
   function updateSearchlight(unit, dt, t, target) {
     const wig = {
       x: Math.sin(t * 0.6 + unit.userData.phase) * 26,
@@ -848,8 +1031,8 @@
       });
       aScaleAttr.needsUpdate = true;
       aSeedAttr.needsUpdate = true;
-      city.buildings = { mesh, list, matrix: matrix, pos: pos, quat: quat, scl: scl };
-      // keep a pristine copy of the instance colors so hover highlights can be undone
+      city.buildings = { mesh, list, matrix, pos, quat, scl };
+      // keep a pristine copy of the instance colors so damage states can be undone
       city.buildings.origColors = mesh.instanceColor.array.slice();
       city.aliveCount = count;
       city.total = count;
@@ -947,13 +1130,13 @@
       });
       const spire = new THREE.Mesh(
         new THREE.CylinderGeometry(0.18, 0.5, 9, 8),
-        new THREE.MeshBasicMaterial({ color: 0x9adfff, emissive: 0x9adfff, emissiveIntensity: 1.2 })
+        new THREE.MeshBasicMaterial({ color: 0x9adfff })
       );
       spire.position.y = y + 4.5;
       group.add(spire);
       const beacon = new THREE.Mesh(
         new THREE.SphereGeometry(0.5, 12, 12),
-        new THREE.MeshBasicMaterial({ color: 0xff2d2d, emissive: 0xff2d2d, emissiveIntensity: 2 })
+        new THREE.MeshBasicMaterial({ color: 0xff2d2d })
       );
       beacon.position.y = y + 9;
       group.add(beacon);
@@ -1009,13 +1192,13 @@
       // lantern + spire
       const lantern = new THREE.Mesh(
         new THREE.SphereGeometry(0.9, 12, 12),
-        new THREE.MeshBasicMaterial({ color: 0xffd166, emissive: 0xffd166, emissiveIntensity: 2 })
+        new THREE.MeshBasicMaterial({ color: 0xffd166 })
       );
       lantern.position.y = y + 1.2;
       group.add(lantern);
       const spire = new THREE.Mesh(
         new THREE.CylinderGeometry(0.08, 0.3, 8, 6),
-        new THREE.MeshBasicMaterial({ color: 0xffd166, emissive: 0xffd166, emissiveIntensity: 1 })
+        new THREE.MeshBasicMaterial({ color: 0xffd166 })
       );
       spire.position.y = y + 5.2;
       group.add(spire);
@@ -1082,7 +1265,7 @@
       group.add(spire);
       const ball = new THREE.Mesh(
         new THREE.SphereGeometry(0.55, 10, 10),
-        new THREE.MeshBasicMaterial({ color: 0xff2d2d, emissive: 0xff2d2d, emissiveIntensity: 2 })
+        new THREE.MeshBasicMaterial({ color: 0xff2d2d })
       );
       ball.position.y = 74.5;
       group.add(ball);
@@ -1100,7 +1283,7 @@
   }
 
   // ============================================================================
-  //  MOTHERSHIP
+  //  MOTHERSHIP (visual base — used by the boss and the attract/demo modes)
   // ============================================================================
 
   class Mothership {
@@ -1223,6 +1406,11 @@
       return target;
     }
 
+    setHeight(y) {
+      this.homePos.y = y;
+      this.targetPos.y = y;
+    }
+
     update(dt, time) {
       // yaw toward the attack target (shortest-path easing)
       const yawDelta = normalizeAngle(this.faceTargetYaw, this.facingYaw) - this.facingYaw;
@@ -1234,9 +1422,10 @@
       const k = Math.min(1, dt * 2.2);
       p.x += (this.targetPos.x - p.x) * k;
       p.z += (this.targetPos.z - p.z) * k;
+      p.y += (this.targetPos.y - p.y) * k;
 
       // bob + spin
-      this.group.position.y = CONFIG.shipHeight + Math.sin(time * 0.9) * 1.4;
+      p.y += Math.sin(time * 0.9) * 1.4;
       this.disc.rotation.y += dt * 0.18;
       this.ringA.rotation.y += dt * 0.55;
       this.ringB.rotation.y -= dt * 0.85;
@@ -1250,7 +1439,7 @@
   }
 
   // ============================================================================
-  //  SCOUT UFOs — small saucers patrolling the city sky under the mothership
+  //  SCOUT UFOs — small saucers patrolling the city sky (visual base)
   // ============================================================================
 
   class ScoutShip {
@@ -1300,25 +1489,6 @@
         g.add(rim);
       }
 
-      // faint search beam pointing down at the city
-      this.beam = new THREE.Mesh(
-        new THREE.ConeGeometry(10, 64, 20, 1, true),
-        new THREE.MeshBasicMaterial({
-          color: cfg.color, transparent: true, opacity: 0.07,
-          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
-        })
-      );
-      this.beam.rotation.x = Math.PI; // apex points down
-      g.add(this.beam);
-
-      // soft pool of light where the beam kisses the ground
-      this.pool = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: makeGlowTexture([[0, 'rgba(255,255,255,0.20)'],[0.5, 'rgba(255,255,255,0.06)'],[1, 'rgba(255,255,255,0)']], 128),
-        color: cfg.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      }));
-      this.pool.position.y = 1.2;
-      sceneGroup.add(this.pool);
-
       this.light = new THREE.PointLight(cfg.color, 1500, 170, 1.8);
       g.add(this.light);
     }
@@ -1331,17 +1501,7 @@
       p.z = Math.sin(c.phase) * c.radius;
       p.y = c.height + Math.sin(t * 1.3 + c.phase * 2.0) * 2.4;
       this.group.rotation.y += dt * 0.6;
-
-      // beam length follows the ship's altitude (apex ends at the ground)
-      const s = (p.y - 0.5) / 64;
-      this.beam.position.y = (p.y - 0.5) / 2;
-      this.beam.scale.setScalar(s);
-      this.beam.material.opacity = 0.07 * (0.75 + 0.25 * Math.sin(t * 6.0 + c.phase * 4.0));
       this.light.intensity = 1500 * (0.7 + 0.3 * Math.sin(t * 4.0 + c.phase));
-
-      // ground pool follows the beam tip
-      this.pool.position.set(p.x, 1.2, p.z);
-      this.pool.scale.setScalar(10 + p.y * 0.3);
     }
   }
 
@@ -1611,6 +1771,8 @@
   //  Physics-lite: buoyant rise, drag, gravity, growth, fade.
   // ============================================================================
 
+  const DOT_TEXTURE = makeSoftDotTexture();
+
   class ParticlePool {
     constructor(sceneGroup, opts) {
       this.max = opts.max;
@@ -1782,8 +1944,6 @@
     }
   }
 
-  const DOT_TEXTURE = makeSoftDotTexture();
-
   // ============================================================================
   //  CITY TRAFFIC — little cars with glowing headlights cruising the avenues
   // ============================================================================
@@ -1822,6 +1982,7 @@
         })
       );
       body.position.y = 0.42;
+      body.castShadow = true;
       g.add(body);
       const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.7), CAR_GLASS_MAT);
       cabin.position.set(-0.12, 0.78, 0);
@@ -1907,8 +2068,22 @@
       }
     }
 
+    /** Immediately dispose of a car (friendly fire) — stays gone until re-place. */
+    pop(car) {
+      car.visible = false;
+      car.userData.popped = true;
+    }
+
+    restore() {
+      for (const car of this.cars) {
+        car.visible = true;
+        car.userData.popped = false;
+      }
+    }
+
     update(dt) {
       for (const car of this.cars) {
+        if (car.userData.popped) continue;
         const ud = car.userData;
         if (!ud) continue;
         if (ud.mode === 'lane') {
@@ -1976,133 +2151,1536 @@
   }
 
   // ============================================================================
-  //  THE GAME ORCHESTRATOR
+  //  GAME STATE MACHINE
+  // ============================================================================
+
+  const GameState = Object.freeze({
+    MENU: 'MENU',
+    WAVE_BANNER: 'WAVE_BANNER',
+    PLAYING: 'PLAYING',
+    GAME_OVER: 'GAME_OVER',
+    VICTORY: 'VICTORY',
+  });
+
+  class GameStateMachine {
+    constructor() { this.state = GameState.MENU; this.handlers = {}; }
+    on(state, fn) { this.handlers[state] = fn; }
+    setState(state, payload) {
+      this.state = state;
+      if (this.handlers[state]) this.handlers[state](payload);
+    }
+  }
+
+  // ============================================================================
+  //  SCORE KEEPER — pure arcade score, persisted high score
+  // ============================================================================
+
+  class ScoreKeeper {
+    constructor(hud) {
+      this.score = 0;
+      this._key = 'city-defender-3d.highscore';
+      this.hud = hud;
+    }
+    add(p) { this.score += p; this.hud.setScore(this.score); }
+    subtract(p) { this.score = Math.max(0, this.score - p); this.hud.setScore(this.score); }
+    reset() { this.score = 0; this.hud.setScore(0); }
+    getHighScore() {
+      try { return Number(localStorage.getItem(this._key) || 0); } catch (e) { return 0; }
+    }
+    saveHighScore() {
+      try { localStorage.setItem(this._key, String(Math.max(this.getHighScore(), this.score))); } catch (e) { /* private mode */ }
+    }
+  }
+
+  // ============================================================================
+  //  AUDIO MANAGER — WebAudio-synthesized SFX, no audio files
+  // ============================================================================
+
+  class AudioManager {
+    constructor() { this.ctx = null; this.master = null; }
+
+    unlock() {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.35;
+        this.master.connect(this.ctx.destination);
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    }
+
+    tone(freq, dur, type = 'square', vol = 0.3, slideTo = null, delay = 0) {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime + delay;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(Math.max(20, freq), t0);
+      if (slideTo) osc.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t0 + dur);
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g); g.connect(this.master);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    }
+
+    noise(dur, vol = 0.3, filterFreq = 800, delay = 0) {
+      if (!this.ctx) return;
+      const t0 = this.ctx.currentTime + delay;
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * dur));
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const filt = this.ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = filterFreq;
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(vol, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      src.connect(filt); filt.connect(g); g.connect(this.master);
+      src.start(t0);
+    }
+
+    play(name) {
+      if (!this.ctx || !this.master) return;
+      switch (name) {
+        case 'zap': this.tone(880, 0.08, 'square', 0.10, 620); break;
+        case 'spark': this.noise(0.06, 0.12, 3000); break;
+        case 'explosion': this.noise(0.5, 0.35, 600); this.tone(110, 0.5, 'sine', 0.3, 40); break;
+        case 'smallExplosion': this.noise(0.28, 0.28, 900); this.tone(160, 0.25, 'sine', 0.22, 60); break;
+        case 'bombDrop': this.tone(300, 0.25, 'sawtooth', 0.12, 120); break;
+        case 'alarm': this.tone(660, 0.28, 'sawtooth', 0.16); this.tone(880, 0.28, 'sawtooth', 0.16, null, 0.32); break;
+        case 'wave': [523, 659, 784, 1046].forEach((f, i) => this.tone(f, 0.16, 'triangle', 0.2, null, i * 0.09)); break;
+        case 'bossHit': this.tone(2100, 0.05, 'square', 0.12, 1600); break;
+        case 'stun': this.tone(600, 0.6, 'sawtooth', 0.18, 120); break;
+        case 'victory': [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => this.tone(f, 0.22, 'square', 0.18, null, i * 0.11)); break;
+        case 'gameover': [440, 349, 293, 220].forEach((f, i) => this.tone(f, 0.34, 'sawtooth', 0.16, null, i * 0.16)); break;
+      }
+    }
+  }
+
+  // ============================================================================
+  //  HUD — DOM readouts, bars, banners, screens
+  // ============================================================================
+
+  class HUD {
+    constructor() {
+      this.el = {
+        hud: document.getElementById('hud'),
+        cityLabel: document.getElementById('cityLabel'),
+        score: document.getElementById('scoreVal'),
+        wave: document.getElementById('waveVal'),
+        enemyCount: document.getElementById('enemyCount'),
+        cityHpBar: document.getElementById('cityHpBar'),
+        bossRow: document.getElementById('bossRow'),
+        bossHpBar: document.getElementById('bossHpBar'),
+        stunFlash: document.getElementById('stunFlash'),
+        hiScore: document.getElementById('hiScoreVal'),
+        menu: document.getElementById('menu'),
+        menuHi: document.getElementById('menuHiVal'),
+        banner: document.getElementById('waveBanner'),
+        bannerText: document.getElementById('waveBannerText'),
+        bannerSub: document.getElementById('waveBannerSub'),
+        screen: document.getElementById('screen'),
+        screenTitle: document.getElementById('screenTitle'),
+        screenScore: document.getElementById('screenScore'),
+        screenHi: document.getElementById('screenHi'),
+        screenNewHi: document.getElementById('screenNewHi'),
+        againBtn: document.getElementById('againBtn'),
+        replayBtn: document.getElementById('replayBtn'),
+        startBtn: document.getElementById('startBtn'),
+        stunBase: document.getElementById('stunFlash'),
+      };
+    }
+
+    showHud(v) { gsap.to(this.el.hud, { opacity: v ? 1 : 0, duration: 0.4 }); }
+    showMenu(v) {
+      this.el.menu.style.display = v ? 'flex' : 'none';
+      if (v) { gsap.fromTo(this.el.menu, { opacity: 0 }, { opacity: 1, duration: 0.5 }); this.el.menuHi.textContent = this.hi; }
+    }
+    showCrosshair(v) { document.body.classList.toggle('playing', v); }
+
+    hideBanner() { gsap.to(this.el.banner, { opacity: 0, duration: 0.3 }); }
+
+    setScore(s) {
+      if (this.el.score.textContent === String(s)) return;
+      this.el.score.textContent = s;
+      gsap.fromTo(this.el.score, { scale: 1.25 }, { scale: 1, duration: 0.25, ease: 'power2.out' });
+    }
+    setWave(n) { this.el.wave.textContent = n; }
+    setEnemyCount(n) {
+      this.el.enemyCount.textContent = n > 0 ? n + ' HOSTILES' : 'CLEAR';
+      this.el.enemyCount.style.color = n > 0 ? '#ff8ab0' : '#6bff9e';
+    }
+    setCityLabel(s) { this.el.cityLabel.textContent = s; }
+    setCityHp(f) {
+      const pct = Math.round(f * 100);
+      if (this.cityPct === pct) return;
+      this.cityPct = pct;
+      this.el.cityHpBar.style.width = pct + '%';
+      this.el.cityHpBar.style.background = pct > 60 ? 'linear-gradient(90deg, #00e5ff, #6bff9e)'
+        : pct > 30 ? 'linear-gradient(90deg, #ffb84d, #ffd166)'
+        : 'linear-gradient(90deg, #ff3b6e, #ff5d7a)';
+      this.el.cityHpBar.style.boxShadow = pct < 30 ? '0 0 14px rgba(255, 59, 110, .9)' : '0 0 12px rgba(0, 229, 255, .8)';
+    }
+    setBossHp(f) {
+      this.el.bossRow.style.display = f === null ? 'none' : 'flex';
+      if (f === null) return;
+      this.el.bossHpBar.style.width = Math.round(f * 100) + '%';
+    }
+    setHiScore(v) { this.hi = v; this.el.hiScore.textContent = v; }
+
+    flashStun(on) {
+      if (on === this.stunOn) return;
+      this.stunOn = on;
+      gsap.killTweensOf(this.el.stunFlash);
+      gsap.to(this.el.stunFlash, { opacity: on ? 0.9 : 0, duration: on ? 0.2 : 0.3 });
+    }
+
+    showWaveBanner(n, cb) {
+      this.el.bannerText.textContent = 'WAVE ' + n;
+      this.el.bannerSub.textContent = n >= 9 ? 'THE MOTHERSHIP ARRIVES' : 'ENEMIES INBOUND';
+      gsap.killTweensOf(this.el.banner);
+      gsap.fromTo(this.el.banner, { opacity: 0, scale: 0.7 },
+        { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
+      gsap.delayedCall(1.9, () => {
+        gsap.to(this.el.banner, { opacity: 0, scale: 0.85, duration: 0.4, ease: 'power2.in', onComplete: cb });
+      });
+    }
+
+    showScreen(kind, score, hi, isNewHi) {
+      const el = this.el;
+      el.screen.classList.remove('gameover', 'victory');
+      el.screen.classList.add(kind, 'show');
+      el.screenTitle.textContent = kind === 'victory' ? 'CITY SAVED' : 'GAME OVER';
+      el.screenScore.textContent = score;
+      el.screenHi.textContent = hi;
+      el.screenNewHi.style.display = isNewHi ? 'block' : 'none';
+      gsap.fromTo(el.screen, { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
+    }
+    hideScreen() {
+      this.el.screen.classList.remove('show', 'gameover', 'victory');
+      this.el.screen.style.opacity = 0;
+    }
+  }
+
+  // ============================================================================
+  //  PLAYER DRONE — auto-piloted patrol jet (player aims & fires, not steers)
+  // ============================================================================
+
+  class PlayerDrone {
+    constructor(sceneGroup, world, radius, altitude) {
+      this.world = world;
+      this.group = new THREE.Group();
+      this.radius = radius;
+      this.altitude = altitude;
+      this.speed = CONFIG.drone.speed;
+      this.angle = Math.random() * Math.PI * 2;
+      this.pos = new THREE.Vector3(radius, altitude, 0);
+      this.fwd = new THREE.Vector3(0, 0, 1);
+      sceneGroup.add(this.group);
+
+      // ---- procedural jet ----
+      const hullMat = new THREE.MeshStandardMaterial({
+        color: 0x2a2f4a, metalness: 0.7, roughness: 0.35,
+        emissive: 0x0a1240, emissiveIntensity: 1,
+      });
+      const fuselage = new THREE.Mesh(new THREE.ConeGeometry(0.75, 3.6, 10), hullMat);
+      fuselage.rotation.x = -Math.PI / 2;          // apex points +Z (nose)
+      this.group.add(fuselage);
+      const glowTex = makeGlowTexture([[0, 'rgba(0,229,255,0.9)'],[0.5, 'rgba(0,120,255,0.3)'],[1, 'rgba(0,120,255,0)']], 64);
+      const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0x9adfff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+      cockpit.position.set(0, 0.28, 0.5);
+      this.group.add(cockpit);
+
+      const wingMat = new THREE.MeshStandardMaterial({ color: 0x1e2338, metalness: 0.6, roughness: 0.4 });
+      const wingL = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.1, 1.3), wingMat);
+      wingL.position.set(-1.35, 0.1, -0.3);
+      const wingR = wingL.clone();
+      wingR.position.x = 1.35;
+      this.group.add(wingL, wingR);
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.7, 0.7), wingMat);
+      fin.position.set(0, 0.45, -1.2);
+      this.group.add(fin);
+
+      // engine glow sprites (additive)
+      const engL = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x66ccff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      engL.scale.setScalar(2.4); engL.position.set(-0.45, -0.25, -1.8);
+      const engR = engL.clone(); engR.position.x = 0.45;
+      this.group.add(engL, engR);
+
+      // soft under-glow
+      this.underGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x00e5ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      this.underGlow.scale.setScalar(7);
+      this.group.add(this.underGlow);
+    }
+
+    reset(radius) {
+      this.radius = radius;
+      this.angle = Math.random() * Math.PI * 2;
+    }
+
+    update(dt, time) {
+      this.angle += (this.speed * dt) / this.radius;
+      const a = this.angle;
+      this.pos.set(Math.cos(a) * this.radius, this.altitude, Math.sin(a) * this.radius);
+      this.fwd.set(-Math.sin(a), 0, Math.cos(a)).normalize();
+      this.group.position.copy(this.pos);
+      this.group.lookAt(this.pos.clone().add(this.fwd));
+      this.group.rotateZ(Math.cos(a) * CONFIG.drone.roll * Math.sign(this.speed));
+
+      // engine trail (cheap: 1 particle per frame)
+      if (Math.random() < 0.9) {
+        const tail = this.pos.clone().add(this.fwd.clone().multiplyScalar(-3.6)).add(new THREE.Vector3(0, -0.6, 0));
+        this.world.firePool.spawn(tail.x, tail.y, tail.z, {
+          count: 1, speedMin: 0.4, speedMax: 1.4, upBias: 0,
+          color0: [0.15, 0.65, 1], color1: [0.02, 0.08, 0.3],
+          lifeMin: 0.3, lifeMax: 0.7, sizeMin: 0.4, sizeMax: 1.1,
+        });
+      }
+      this.underGlow.material.opacity = 0.35 + 0.2 * Math.sin(time * 6);
+    }
+  }
+
+  // ============================================================================
+  //  AIM CONTROLLER — crosshair + camera ray (ISP: input only, emits hit events)
+  // ============================================================================
+
+  class AimController {
+    constructor(crosshairEl) {
+      this.crosshair = crosshairEl;
+      this.ndc = new THREE.Vector2(0, 0);
+      this.ray = new THREE.Raycaster();
+      this.ray.far = 2000;
+    }
+
+    onMove(e) {
+      this.ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
+      this.ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      this.crosshair.style.left = e.clientX + 'px';
+      this.crosshair.style.top = e.clientY + 'px';
+    }
+
+    update(camera) {
+      this.ray.setFromCamera(this.ndc, camera);
+    }
+  }
+
+  // ============================================================================
+  //  BULLET POOL — glowing tracers fired at the crosshair
+  // ============================================================================
+
+  class BulletPool {
+    constructor(sceneGroup) {
+      this.sceneGroup = sceneGroup;
+      this.speed = CONFIG.fire.bulletSpeed;
+      this.damage = CONFIG.fire.bulletDamage;
+      this.range = CONFIG.fire.bulletRange;
+      this.pool = [];
+      this.active = [];
+      const tex = makeGlowTexture([[0, 'rgba(180,240,255,1)'],[0.4, 'rgba(0,180,255,0.6)'],[1, 'rgba(0,180,255,0)']], 64);
+      for (let i = 0; i < CONFIG.fire.bulletCount; i++) {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, color: 0xbfefff, transparent: true,
+          blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+        }));
+        s.visible = false;
+        s.renderOrder = 14;
+        sceneGroup.add(s);
+        this.pool.push(s);
+      }
+    }
+
+    fire(pos, dir) {
+      const s = this.pool.pop();
+      if (!s) return null;
+      s.visible = true;
+      s.position.copy(pos);
+      s.scale.setScalar(0.9 + Math.random() * 0.5);
+      const b = { mesh: s, pos: pos.clone(), dir: dir.clone(), trav: 0 };
+      this.active.push(b);
+      return b;
+    }
+
+    release(b) {
+      const i = this.active.indexOf(b);
+      if (i < 0) return;
+      this.active.splice(i, 1);
+      b.mesh.visible = false;
+      this.pool.push(b.mesh);
+    }
+
+    releaseAll() {
+      for (const b of this.active.slice()) this.release(b);
+    }
+
+    update(dt) {
+      for (const b of this.active.slice()) {
+        b.trav += this.speed * dt;
+        b.pos.addScaledVector(b.dir, this.speed * dt);
+        if (b.trav > this.range) { this.release(b); continue; }
+        b.mesh.position.copy(b.pos);
+      }
+    }
+  }
+
+  // ============================================================================
+  //  ENEMY SHOT POOL — cosmetic "pea" rounds from scouts (no player damage)
+  // ============================================================================
+
+  class EnemyShotPool {
+    constructor(sceneGroup) {
+      this.sceneGroup = sceneGroup;
+      this.pool = [];
+      this.active = [];
+      const tex = makeGlowTexture([[0, 'rgba(255,120,110,1)'],[0.4, 'rgba(255,50,60,0.5)'],[1, 'rgba(255,50,60,0)']], 64);
+      for (let i = 0; i < 26; i++) {
+        const s = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: tex, color: 0xff6666, transparent: true,
+          blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+        }));
+        s.visible = false;
+        s.renderOrder = 15;
+        sceneGroup.add(s);
+        this.pool.push(s);
+      }
+    }
+
+    fire(from, targetPos, speed = 55) {
+      const s = this.pool.pop();
+      if (!s) return;
+      const dir = targetPos.clone().sub(from).normalize();
+      s.visible = true;
+      s.scale.setScalar(2);
+      s.position.copy(from);
+      this.active.push({ mesh: s, pos: from.clone(), vel: dir.multiplyScalar(speed), life: 0, maxLife: 6 });
+    }
+
+    update(dt) {
+      for (const p of this.active.slice()) {
+        p.life += dt;
+        p.pos.addScaledVector(p.vel, dt);
+        p.mesh.position.copy(p.pos);
+        p.mesh.material.opacity = p.life > p.maxLife - 0.8 ? Math.max(0, (p.maxLife - p.life) / 0.8) : 1;
+        if (p.life >= p.maxLife || p.pos.y < 0.5) {
+          const i = this.active.indexOf(p);
+          this.active.splice(i, 1);
+          p.mesh.visible = false;
+          p.mesh.material.opacity = 1;
+          this.pool.push(p.mesh);
+        }
+      }
+    }
+
+    releaseAll() {
+      for (const p of this.active.slice()) {
+        const i = this.active.indexOf(p);
+        this.active.splice(i, 1);
+        p.mesh.visible = false;
+        p.mesh.material.opacity = 1;
+        this.pool.push(p.mesh);
+      }
+    }
+  }
+
+  // ============================================================================
+  //  ENEMY BASE — every hostile satisfies this interface (OCP / LSP anchor)
+  // ============================================================================
+
+  class Enemy {
+    constructor(world, hp, scoreValue) {
+      this.world = world;
+      this.hp = hp;
+      this.maxHp = hp;
+      this.scoreValue = scoreValue;
+      this.scoreAward = null; // primary kills award score themselves
+      this.alive = true;
+      this.group = new THREE.Group();
+      this.group.userData.owner = this;
+      world.sceneGroup.add(this.group);
+    }
+
+    update(dt, t, world) { /* override */ }
+
+    damage(amount, hitPoint) {
+      if (!this.alive) return false;
+      this.hp -= amount;
+      this.world.audio.play('hit');
+      if (this.hp <= 0) { this.onDestroyed(hitPoint); return true; }
+      return false;
+    }
+
+    onDestroyed(hitPoint) {
+      if (!this.alive) return;
+      this.alive = false;
+      const p = hitPoint || this.group.position;
+      this.world.fx.spawn(p.clone(), 0xff6a00, 1.3);
+      this.world.audio.play('smallExplosion');
+      if (this.world.game.explode) {
+        this.world.game.explode(this.group.position.x, this.group.position.y, this.group.position.z, 0.9);
+      }
+      this.world.score.add(this.scoreValue);
+      this.world.sceneGroup.remove(this.group);
+    }
+  }
+
+  // ============================================================================
+  //  SCOUT ENEMY — circling saucer; pea-shooter from wave 4 on
+  // ============================================================================
+
+  class ScoutEnemy extends Enemy {
+    constructor(world, hpScale = 1) {
+      super(world, Math.max(1, Math.round(2 * hpScale)), SCORE_TABLE.SCOUT);
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x2a2148, metalness: 0.8, roughness: 0.35,
+        emissive: 0x3b1f7e, emissiveIntensity: 0.8,
+      });
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 1.0, 22), bodyMat);
+      this.group.add(disc);
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.15, 14, 10),
+        new THREE.MeshStandardMaterial({ color: 0x26303c, metalness: 0.5, roughness: 0.2, emissive: 0xff44aa, emissiveIntensity: 0.55 }));
+      dome.position.y = 0.75;
+      this.group.add(dome);
+      const belly = new THREE.Mesh(new THREE.CircleGeometry(2.8, 18),
+        new THREE.MeshBasicMaterial({ color: 0xff44aa, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      belly.position.y = -0.5;
+      this.group.add(belly);
+      const rimMat = new THREE.MeshBasicMaterial({ color: 0xff88cc, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rim = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), rimMat);
+        rim.position.set(Math.cos(a) * 3.2, -0.2, Math.sin(a) * 3.2);
+        this.group.add(rim);
+      }
+
+      this.orbit = {
+        radius: CONFIG.wave.spawnRadius + Math.random() * 30,
+        targetRadius: 95 + Math.random() * 75,
+        height: 55 + Math.random() * 35,
+        speed: (Math.random() > 0.5 ? 1 : -1) * (0.22 + Math.random() * 0.3),
+        phase: Math.random() * Math.PI * 2,
+      };
+      this.fireTimer = 1.5 + Math.random() * 2.5;
+    }
+
+    update(dt, t, world) {
+      const c = this.orbit;
+      c.phase += dt * c.speed;
+      c.radius += (c.targetRadius - c.radius) * Math.min(1, dt * 0.25);
+      const p = this.group.position;
+      p.x = Math.cos(c.phase) * c.radius;
+      p.z = Math.sin(c.phase) * c.radius;
+      p.y = c.height + Math.sin(t * 1.3 + c.phase * 2) * 3;
+      this.group.rotation.y += dt * 0.6;
+
+      // pea-shooter (cosmetic) from wave 4+
+      if (world.waveNumber >= 4 && world.combat && world.drone) {
+        this.fireTimer -= dt;
+        if (this.fireTimer <= 0) {
+          this.fireTimer = 1.6 + Math.random() * 1.8;
+          world.enemyShots.fire(p.clone(), world.drone.pos, 45 + Math.random() * 25);
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  //  BOMBER ENEMY — crosses the city, drops destructible bombs
+  // ============================================================================
+
+  class BomberEnemy extends Enemy {
+    constructor(world, hpScale = 1, target) {
+      super(world, Math.max(1, Math.round(4 * hpScale)), SCORE_TABLE.BOMBER);
+      this.target = target;
+      this.dropped = 0;
+      this.bombCount = 1 + (Math.random() < 0.4 ? 1 : 0);
+      this.altitude = 38 + Math.random() * 14;
+
+      const a = Math.random() * Math.PI * 2;
+      const r = CONFIG.wave.spawnRadius;
+      this.group.position.set(Math.cos(a) * r, this.altitude, Math.sin(a) * r);
+      this.startPos = this.group.position.clone();
+      this.aimDir = new THREE.Vector3(target.x - this.startPos.x, 0, target.z - this.startPos.z).normalize();
+      this.speed = 10 + Math.random() * 4;
+
+      // boxy twin-engine bomber with glowing engine pods
+      const hullMat = new THREE.MeshStandardMaterial({
+        color: 0x23283c, metalness: 0.7, roughness: 0.4,
+        emissive: 0x141c3c, emissiveIntensity: 0.8,
+      });
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 3.6), hullMat);
+      this.group.add(hull);
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.4, 8), hullMat);
+      nose.rotation.x = Math.PI / 2;
+      nose.position.z = 2.4;
+      this.group.add(nose);
+      const glowTex = makeGlowTexture([[0, 'rgba(255,120,60,0.9)'],[0.5, 'rgba(255,60,30,0.35)'],[1, 'rgba(255,60,30,0)']], 64);
+      for (const sx of [-1, 1]) {
+        const podG = new THREE.Group();
+        const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 1.6, 10), hullMat);
+        pod.rotation.x = Math.PI / 2;
+        podG.add(pod);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff8844, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+        glow.scale.setScalar(2.6);
+        glow.position.z = -0.9;
+        podG.add(glow);
+        podG.position.set(sx * 1.15, -0.35, 0.2);
+        this.group.add(podG);
+      }
+      this.rot = 0;
+    }
+
+    update(dt, t, world) {
+      const p = this.group.position;
+      p.addScaledVector(this.aimDir, this.speed * dt);
+      p.y = this.altitude + Math.sin(t * 2.2 + this.startPos.x) * 2.5;
+      this.group.lookAt(p.x + this.aimDir.x, p.y, p.z + this.aimDir.z);
+
+      if (this.dropped < this.bombCount) {
+        const dx = p.x - this.target.x, dz = p.z - this.target.z;
+        if (dx * dx + dz * dz < 81) {
+          this.dropped += 1;
+          world.bombPool.drop(p.x, p.y - 2.5, p.z, this.target);
+          world.audio.play('bombDrop');
+          if (this.dropped < this.bombCount) this.target = world.integrity.getRandomAlive() || this.target;
+        }
+      }
+
+      // left the patrol zone -> despawn quietly
+      if (p.lengthSq() > 265 * 265) {
+        this.alive = false;
+        world.sceneGroup.remove(this.group);
+      }
+    }
+  }
+
+  // ============================================================================
+  //  DIVE DRONE ENEMY — kamikaze: rams the player and stuns the cannon
+  // ============================================================================
+
+  class DiveDroneEnemy extends Enemy {
+    constructor(world, hpScale = 1) {
+      super(world, Math.max(1, Math.round(2 * hpScale)), SCORE_TABLE.DIVE_DRONE);
+
+      const dartMat = new THREE.MeshStandardMaterial({
+        color: 0x33202e, metalness: 0.8, roughness: 0.3,
+        emissive: 0x7e1230, emissiveIntensity: 0.9,
+      });
+      const body = new THREE.Mesh(new THREE.ConeGeometry(0.6, 3, 8), dartMat);
+      body.rotation.x = Math.PI / 2; // apex forward (+Z)
+      this.group.add(body);
+      for (const sx of [-1, 1]) {
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.1, 1.0), dartMat);
+        fin.position.set(sx * 0.55, 0.1, -0.6);
+        this.group.add(fin);
+      }
+      const glowTex = makeGlowTexture([[0, 'rgba(255,60,90,0.9)'],[0.5, 'rgba(255,20,60,0.3)'],[1, 'rgba(255,20,60,0)']], 64);
+      this.trail = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff4466, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      this.trail.scale.setScalar(6);
+      this.group.add(this.trail);
+
+      this.state = 'patrol';
+      this.angle = Math.random() * Math.PI * 2;
+      this.orbitR = 200 + Math.random() * 60;
+      this.alt = 55 + Math.random() * 30;
+      this.vel = new THREE.Vector3();
+    }
+
+    update(dt, t, world) {
+      const drone = world.drone;
+      const p = this.group.position;
+      if (this.state === 'patrol') {
+        this.angle += dt * 0.35;
+        p.set(Math.cos(this.angle) * this.orbitR, this.alt + Math.sin(t * 0.8) * 4, Math.sin(this.angle) * this.orbitR);
+        if (drone && p.distanceTo(drone.pos) < 150) {
+          this.state = 'dive';
+          this.vel.copy(drone.pos).sub(p).normalize().multiplyScalar(38);
+          world.audio.play('alarm');
+        }
+      } else {
+        // home in on the drone
+        const toDrone = drone.pos.clone().sub(p);
+        const dist = toDrone.length();
+        this.vel.addScaledVector(toDrone.normalize(), 62 * dt);
+        if (this.vel.length() > 95) this.vel.setLength(95);
+        p.addScaledVector(this.vel, dt);
+        this.group.lookAt(p.clone().add(this.vel));
+        this.trail.scale.setScalar(4 + dist * 0.06);
+
+        if (dist < 5.5 && drone) {
+          // KAMIKAZE — stun the player, destroy ourselves
+          world.combat.setStunned(CONFIG.stun.time);
+          world.fx.spawn(drone.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4, 1, (Math.random() - 0.5) * 4)), 0xff3355, 1.1);
+          world.audio.play('explosion');
+          this.alive = false;
+          world.sceneGroup.remove(this.group);
+          return;
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  //  BOMB POOL — falling alien bombs (destructible = intercept bonus)
+  // ============================================================================
+
+  class BombPool {
+    constructor(sceneGroup, world) {
+      this.sceneGroup = sceneGroup;
+      this.world = world;
+      this.pool = [];
+      this.active = [];
+      this.ray = new THREE.Raycaster();
+      const geo = new THREE.SphereGeometry(CONFIG.bomb.radius, 10, 8);
+      const glowTex = makeGlowTexture([[0, 'rgba(255,160,60,1)'],[0.4, 'rgba(255,90,20,0.5)'],[1, 'rgba(255,90,20,0)']], 64);
+      for (let i = 0; i < CONFIG.bomb.count; i++) {
+        const g = new THREE.Group();
+        g.visible = false;
+        const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+        g.add(mesh);
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffaa44, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+        glow.scale.setScalar(5);
+        g.add(glow);
+        g.userData.bomb = null;
+        this.sceneGroup.add(g);
+        this.pool.push(g);
+      }
+    }
+
+    drop(x, y, z, target) {
+      const g = this.pool.pop();
+      if (!g) return null;
+      g.visible = true;
+      g.position.set(x, y, z);
+      const b = { group: g, x, y, z, vy: 0, target, alive: true };
+      g.userData.bomb = b;
+      this.active.push(b);
+      return b;
+    }
+
+    release(b) {
+      if (!b.alive) return;
+      b.alive = false;
+      b.group.visible = false;
+      b.group.userData.bomb = null;
+      const i = this.active.indexOf(b);
+      if (i >= 0) this.active.splice(i, 1);
+      this.pool.push(b.group);
+    }
+
+    releaseAll() {
+      for (const b of this.active.slice()) this.release(b);
+    }
+
+    update(dt) {
+      const city = this.world.city;
+      for (const b of this.active.slice()) {
+        b.vy -= 22 * dt;
+        b.y += b.vy * dt;
+        if (b.y < 0.4) { b.y = 0.4; this.detonate(b, null); continue; }
+        b.group.position.set(b.x, b.y, b.z);
+        // bomb meets whatever building is directly below it
+        if (city) {
+          this.ray.set(new THREE.Vector3(b.x, b.y + 0.5, b.z), new THREE.Vector3(0, -1, 0), 0, b.y + 1);
+          const hits = this.ray.intersectObject(city.buildings.mesh, false);
+          if (hits.length > 0) {
+            const id = hits[0].instanceId;
+            if (!this.world.integrity.isRuined(id)) { this.detonate(b, id); continue; }
+          }
+          const lmHits = this.ray.intersectObject(city.landmark.group, true);
+          if (lmHits.length > 0 && !this.world.integrity.isRuined('landmark')) { this.detonate(b, 'landmark'); continue; }
+        }
+      }
+    }
+
+    detonate(b, id) {
+      if (id !== null && this.world.integrity) {
+        this.world.integrity.damageBuilding(id, CONFIG.bomb.damage);
+      }
+      this.world.fx.spawn(new THREE.Vector3(b.x, Math.max(0.3, b.y), b.z), 0xff6a00, 1);
+      this.world.audio.play('smallExplosion');
+      if (this.world.game.explode) this.world.game.explode(b.x, Math.max(1, b.y), b.z, 0.8);
+      this.release(b);
+    }
+  }
+
+  // ============================================================================
+  //  CITY INTEGRITY — HP model, damage states, loss condition (Phase 4)
+  // ============================================================================
+
+  class CityIntegrity {
+    constructor(world, city) {
+      this.world = world;
+      this.city = city;
+      this.entries = new Map();
+      this.alarmed = false;
+      this.triggered = false;
+      this.registerCity();
+    }
+
+    registerCity() {
+      this.entries.clear();
+      for (const b of this.city.buildings.list) {
+        const hp = b.h < 14 ? 100 : b.h < 30 ? 180 : 260;
+        this.entries.set(b.index, { hp, maxHp: hp, state: 0, ruined: false });
+      }
+      this.entries.set('landmark', { hp: 600, maxHp: 600, state: 0, ruined: false });
+    }
+
+    get(id) { return this.entries.get(id); }
+    isRuined(id) {
+      const e = this.entries.get(id);
+      return !e || e.ruined;
+    }
+
+    damageBuilding(id, amount) {
+      const e = this.entries.get(id);
+      if (this.triggered || !e || e.ruined) return;
+      e.hp = Math.max(0, e.hp - amount);
+      const f = e.hp / e.maxHp;
+      const next = f < 0.1 ? 3 : f < 0.4 ? 2 : f < 0.75 ? 1 : 0;
+      if (next > e.state) {
+        e.state = next;
+        this.applyVisual(id, next, e);
+      }
+      this.world.hud.setCityHp(this.getHealth());
+      if (this.getHealth() <= 0 && !this.triggered) {
+        this.triggered = true;
+        this.world.game.gameOver();
+      }
+    }
+
+    getHealth() {
+      let s = 0, m = 0;
+      for (const e of this.entries.values()) { s += e.hp; m += e.maxHp; }
+      return m > 0 ? s / m : 0;
+    }
+
+    getRandomAlive() {
+      const city = this.city;
+      const candidates = [];
+      for (const b of city.buildings.list) {
+        if (!this.isRuined(b.index)) candidates.push({ id: b.index, x: b.x, z: b.z, topY: b.h * 0.8, isLandmark: false });
+      }
+      if (!this.isRuined('landmark')) {
+        candidates.push({ id: 'landmark', x: 0, z: 0, topY: city.landmark.height * 0.7, isLandmark: true });
+      }
+      if (candidates.length === 0) return null;
+      return candidates[(Math.random() * candidates.length) | 0];
+    }
+
+    applyVisual(id, state, entry) {
+      const city = this.city;
+      if (id === 'landmark') {
+        const group = city.landmark.group;
+        if (state >= 2 && !this.alarmed) {
+          this.alarmed = true;
+          this.world.fx.spawn(new THREE.Vector3(0, city.landmark.height * 0.8, 0), 0xff2222, 0.8);
+          this.world.audio.play('alarm');
+        }
+        if (state === 3) {
+          entry.ruined = true;
+          group.traverse(o => {
+            if (o.isMesh && o.material) {
+              const mats = Array.isArray(o.material) ? o.material : [o.material];
+              mats.forEach(m => {
+                if (m.emissive !== undefined) { m.emissive = new THREE.Color(0xff2200); m.emissiveIntensity = 0.9; }
+                else if (m.color !== undefined) m.color.setHex(0x2a1010);
+              });
+            }
+            if (o.isPointLight) gsap.to(o, { intensity: 0, duration: 0.5 });
+          });
+          gsap.to(group.scale, { y: 0.14, duration: 0.9, ease: 'power2.in' });
+          gsap.to(group.rotation, { z: (Math.random() - 0.5) * 0.1, duration: 0.9, ease: 'power2.in' });
+          this.world.game.explode(0, city.landmark.height * 0.5, 0, 1.5);
+        } else {
+          group.traverse(o => {
+            if (o.isMesh && o.material) {
+              const mats = Array.isArray(o.material) ? o.material : [o.material];
+              mats.forEach(m => { if (m.emissive !== undefined) m.emissiveIntensity = Math.max(0.2, (m.emissiveIntensity || 1) * 0.55); });
+            }
+          });
+        }
+        return;
+      }
+
+      // generic instanced building
+      const b = city.buildings.list[id];
+      const mesh = city.buildings.mesh;
+      const orig = city.buildings.origColors;
+      if (!b) return;
+
+      if (state === 1) {
+        // dim windows: darken the instance tint once
+        const c = mesh.instanceColor;
+        c.setXYZ(id, orig[id * 3] * 0.55, orig[id * 3 + 1] * 0.8, orig[id * 3 + 2] * 0.8);
+        c.needsUpdate = true;
+        return;
+      }
+      if (state === 2) {
+        // char + lean (one-shot matrix edit)
+        const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.rotation);
+        quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (Math.random() - 0.5) * 0.1));
+        quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (Math.random() - 0.5) * 0.1));
+        const m = new THREE.Matrix4().compose(
+          new THREE.Vector3(b.x, b.h / 2, b.z), quat, new THREE.Vector3(b.w, b.h, b.d));
+        mesh.setMatrixAt(b.index, m);
+        mesh.instanceMatrix.needsUpdate = true;
+        const c = mesh.instanceColor;
+        c.setXYZ(id, orig[id * 3] * 0.22, orig[id * 3 + 1] * 0.25, orig[id * 3 + 2] * 0.25);
+        c.needsUpdate = true;
+        return;
+      }
+      if (state === 3) {
+        // collapse into a charred rubble mound (never deleted — skyline stays readable)
+        entry.ruined = true;
+        const quat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.rotation);
+        quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (Math.random() - 0.5) * 0.16));
+        const m = new THREE.Matrix4().compose(
+          new THREE.Vector3(b.x, b.h * 0.18, b.z), quat, new THREE.Vector3(b.w * 0.8, b.h * 0.35, b.d * 0.8));
+        mesh.setMatrixAt(b.index, m);
+        mesh.instanceMatrix.needsUpdate = true;
+        const c = mesh.instanceColor;
+        c.setXYZ(id, orig[id * 3] * 0.1, orig[id * 3 + 1] * 0.12, orig[id * 3 + 2] * 0.12);
+        c.needsUpdate = true;
+        if (b.antennaIndex >= 0 && city.antennas) {
+          const am = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
+          am.setPosition(b.x, 0.001, b.z);
+          city.antennas.mesh.setMatrixAt(b.antennaIndex, am);
+          city.antennas.mesh.instanceMatrix.needsUpdate = true;
+        }
+        if (b.beaconIndex >= 0 && city.beacons) {
+          const bm = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
+          bm.setPosition(b.x, 0.001, b.z);
+          city.beacons.mesh.setMatrixAt(b.beaconIndex, bm);
+          city.beacons.mesh.instanceMatrix.needsUpdate = true;
+        }
+        this.world.fx.spawn(new THREE.Vector3(b.x, b.h * 0.4, b.z), 0xff6a00, 1.1);
+        this.world.game.explode(b.x, b.h * 0.4, b.z, 1.1);
+        return;
+      }
+    }
+  }
+
+  // ============================================================================
+  //  BOSS — the Mothership, rebuilt as a real boss fight (Phase 5)
+  // ============================================================================
+
+  class BossMothership extends Enemy {
+    constructor(world) {
+      super(world, CONFIG.boss.hp, SCORE_TABLE.BOSS);
+      this.ship = new Mothership(world.sceneGroup);
+      this.ship.group.userData.owner = this;
+      this.ship.group.position.set(0, CONFIG.shipHeight + 70, 0);
+      this.ship.setHeight(CONFIG.shipHeight);
+      // decorative sprites must not intercept bullets
+      this.ship.group.traverse(o => { if (o.isSprite) o.raycast = () => {}; });
+      this.phase = 'A';
+      this.barrageTimer = 3.2;
+      this.summonTimer = 6;
+      this.pending = [];   // telegraphed strikes: { t, id, x, topY, z, from }
+      world.boss = this;
+      world.hud.setBossHp(1);
+      world.audio.play('alarm');
+    }
+
+    update(dt, t, world) {
+      if (this.phase === 'D') return; // dying
+      this.ship.update(dt, t);
+
+      const frac = this.hp / this.maxHp;
+      const want = frac < 0.33 ? 'C' : frac < 0.66 ? 'B' : 'A';
+      if (want !== this.phase) {
+        this.phase = want;
+        this.barrageTimer = 1;
+        world.fx.spawn(this.ship.group.position.clone(), 0x9adfff, 2.4);
+        world.audio.play('alarm');
+      }
+
+      // phased descent
+      if (this.phase === 'C') this.ship.setHeight(CONFIG.boss.descentY);
+
+      // ---- barrage scheduling ----
+      const interval = this.phase === 'A' ? 2.4 : this.phase === 'B' ? 1.7 : 1.25;
+      const count = this.phase === 'A' ? 1 : this.phase === 'B' ? 2 : 3;
+      this.barrageTimer -= dt;
+      if (this.barrageTimer <= 0 && world.integrity.getHealth() > 0) {
+        this.barrageTimer = interval;
+        for (let i = 0; i < count; i++) this.telegraphStrike(world);
+      }
+
+      // ---- summons ----
+      this.summonTimer -= dt;
+      if (this.summonTimer <= 0) {
+        if (this.phase === 'B') {
+          this.summonTimer = 5.5;
+          world.waveDirector.spawnExtra('DIVE_DRONE', 2);
+        } else if (this.phase === 'C') {
+          this.summonTimer = 7;
+          world.waveDirector.spawnExtra('SCOUT', 5);
+          world.waveDirector.spawnExtra('DIVE_DRONE', 1);
+        } else {
+          this.summonTimer = 6;
+        }
+      }
+
+      // ---- strikes land ----
+      for (const s of this.pending.slice()) {
+        if (t >= s.t) {
+          const i = this.pending.indexOf(s);
+          this.pending.splice(i, 1);
+          this.strike(s, world);
+        }
+      }
+
+      world.hud.setBossHp(frac);
+    }
+
+    telegraphStrike(world) {
+      const target = world.integrity.getRandomAlive();
+      if (!target) return;
+      const from = this.ship.bellyWorld(new THREE.Vector3());
+      world.fx.spawn(new THREE.Vector3(target.x, target.topY, target.z), 0xff2222, 0.7);
+      world.audio.play('spark');
+      this.pending.push({
+        t: world.time + CONFIG.boss.beamTravel,
+        id: target.id,
+        x: target.x, topY: target.topY, z: target.z,
+        from,
+      });
+    }
+
+    strike(s, world) {
+      const beam = world.beams.acquire();
+      if (beam) {
+        const to = new THREE.Vector3(s.x, s.topY, s.z);
+        world.beams.setTransform(beam, s.from, to);
+        const tl = gsap.timeline();
+        tl.to(beam.mesh.scale, { x: 1.15, z: 1.15, duration: 0.14, ease: 'power2.out' }, 0)
+          .to(beam.mat.uniforms.uAlpha, { value: 1, duration: 0.1 }, 0)
+          .call(() => {
+            world.integrity.damageBuilding(s.id, s.id === 'landmark' ? CONFIG.boss.landmarkBeamDamage : CONFIG.boss.beamDamage);
+            world.fx.spawn(new THREE.Vector3(s.x, s.topY, s.z), 0xff6a00, 1.2);
+          }, undefined, 0.2)
+          .to(beam.mesh.scale, { x: 0.01, z: 0.01, y: 0.3, duration: 0.35, ease: 'power2.in' }, 0.35)
+          .to(beam.mat.uniforms.uAlpha, { value: 0, duration: 0.25 }, 0.35)
+          .call(() => world.beams.release(beam), undefined, 0.75);
+      }
+    }
+
+    damage(amount, hitPoint) {
+      if (!this.alive || this.phase === 'D') return false;
+      this.world.audio.play('bossHit');
+      if (hitPoint) this.world.fx.spawn(hitPoint.clone(), 0xff3b6e, 0.6);
+      return super.damage(amount, hitPoint);
+    }
+
+    onDestroyed(hitPoint) {
+      if (!this.alive) return;
+      this.alive = false;
+      this.phase = 'D';
+      this.ship.group.userData.owner = null;
+      worldBossCleanup(this.world, this.ship.group);
+      this.world.score.add(this.scoreValue);
+      this.world.hud.setBossHp(null);
+      this.world.hud.setEnemyCount(0);
+      this.world.audio.play('victory');
+
+      const g = this.ship.group;
+      gsap.killTweensOf(g.position);
+      gsap.to(g.position, { y: 2.5, duration: 1.6, ease: 'power2.in' });
+      this.world.game.delayed(0.9, () => {
+        this.world.fx.spawn(new THREE.Vector3(g.position.x, 1, g.position.z), 0xff5d7a, 3.4);
+        this.world.fx.spawn(new THREE.Vector3(g.position.x, 8, g.position.z), 0x9adfff, 2.2);
+        this.world.game.explode(g.position.x, 12, g.position.z, 2.6);
+        this.world.game.shake(1.2);
+        this.world.audio.play('explosion');
+        g.visible = false;
+        this.world.game.delayed(0.7, () => this.world.gameMachine.setState(GameState.VICTORY));
+      });
+    }
+  }
+
+  function worldBossCleanup(world, group) {
+    // release any beams still aimed at the dying boss
+    for (const b of world.beams.active.slice()) world.beams.release(b);
+  }
+
+  // ============================================================================
+  //  WAVE DIRECTOR — composes escalating waves from a descriptor table
+  // ============================================================================
+
+  const WAVE_TABLE = [
+    { scouts: 4, bombers: 0, dives: 0 },
+    { scouts: 5, bombers: 1, dives: 0 },
+    { scouts: 6, bombers: 2, dives: 1 },
+    { scouts: 7, bombers: 3, dives: 1 },
+    { scouts: 8, bombers: 3, dives: 2 },
+    { scouts: 9, bombers: 4, dives: 2 },
+    { scouts: 10, bombers: 5, dives: 3 },
+    { scouts: 11, bombers: 5, dives: 3 },
+    { boss: true },
+  ];
+
+  class WaveDirector {
+    constructor(world) {
+      this.world = world;
+      this.wave = 0;
+      this.pending = 0;
+    }
+
+    start() {
+      this.wave = 0;
+      this.pending = 0;
+      this.nextWave();
+    }
+
+    nextWave() {
+      this.wave += 1;
+      this.world.hud.setWave(this.wave);
+      this.world.gameMachine.setState(GameState.WAVE_BANNER, { wave: this.wave });
+    }
+
+    spawnWave(n) {
+      const row = WAVE_TABLE[n - 1] || WAVE_TABLE[WAVE_TABLE.length - 1];
+      if (row.boss) { this.spawnExtra('BOSS', 1); return; }
+      const S = 1 + (n - 1) * CONFIG.wave.scalePerWave;
+      this.stagger(Math.round(row.scouts * S), 'SCOUT', S);
+      this.stagger(Math.round(row.bombers * S), 'BOMBER', S);
+      this.stagger(Math.round(row.dives * S), 'DIVE_DRONE', S);
+    }
+
+    stagger(count, type, S) {
+      if (count <= 0) return;
+      this.pending += count;
+      for (let i = 0; i < count; i++) {
+        this.world.game.delayed(0.5 + i * 0.45, () => {
+          this.pending = Math.max(0, this.pending - 1);
+          const st = this.world.gameMachine.state;
+          if (st !== GameState.PLAYING && st !== GameState.WAVE_BANNER) return;
+          this.spawnOne(type, S);
+        });
+      }
+    }
+
+    spawnOne(type, S) {
+      let e = null;
+      if (type === 'SCOUT') e = new ScoutEnemy(this.world, S);
+      else if (type === 'BOMBER') {
+        const t = this.world.integrity.getRandomAlive();
+        if (t) e = new BomberEnemy(this.world, S, t);
+      }
+      else if (type === 'DIVE_DRONE') e = new DiveDroneEnemy(this.world, S);
+      else if (type === 'BOSS') e = new BossMothership(this.world);
+      if (!e) return;
+      this.world.registry.push(e);
+    }
+
+    /** Boss-phase extra spawns (not counted in wave-clear bookkeeping). */
+    spawnExtra(type, count) {
+      const S = 1 + (this.wave - 1) * CONFIG.wave.scalePerWave;
+      for (let i = 0; i < count; i++) {
+        this.world.game.delayed(0.2 + i * 0.4, () => {
+          this.spawnOne(type, S);
+        });
+      }
+    }
+
+    update(dt) {
+      const w = this.world;
+      if (w.gameMachine.state !== GameState.PLAYING) return;
+      if (this.pending > 0) return;
+      if (w.registry.some(e => e.alive)) return;
+      if (this.wave >= WAVE_TABLE.length) return; // boss wave — victory handles it
+      // wave cleared!
+      w.audio.play('wave');
+      w.hud.setEnemyCount(0);
+      this.nextWave();
+    }
+  }
+
+  // ============================================================================
+  //  COMBAT CONTROLLER — firing, bullets, hit resolution, stun (DIP)
+  // ============================================================================
+
+  class CombatController {
+    constructor(world) {
+      this.world = world;
+      this.firing = false;
+      this.fireCooldown = 0;
+      this.stunUntil = -1;
+      this.ray = new THREE.Raycaster();
+      this.ray.far = 2000;
+      this.tmpV = new THREE.Vector3();
+      this.tmpV2 = new THREE.Vector3();
+    }
+
+    setStunned(seconds) {
+      this.stunUntil = Math.max(this.stunUntil, this.world.time + seconds);
+      this.world.hud.flashStun(true);
+      this.world.audio.play('stun');
+    }
+
+    isStunned() { return this.world.time < this.stunUntil; }
+
+    update(dt) {
+      const w = this.world;
+      if (!this.isStunned() && w.hud.stunOn) w.hud.flashStun(false);
+
+      // hold-to-fire
+      if (this.firing && w.drone && w.gameMachine.state === GameState.PLAYING) {
+        this.fireCooldown -= dt;
+        if (this.fireCooldown <= 0 && !this.isStunned()) {
+          this.fireCooldown = CONFIG.fire.cooldown;
+          this.fireShot();
+        }
+      }
+
+      w.bulletPool.update(dt);
+      this.resolveBullets(dt);
+    }
+
+    fireShot() {
+      const w = this.world;
+      const drone = w.drone;
+      const muzzle = this.tmpV.copy(drone.pos)
+        .addScaledVector(drone.fwd, CONFIG.fire.muzzleOffset)
+        .add(this.tmpV2.set(0, -1.2, 0));
+      // aim at the first enemy/bomb under the crosshair, else a point far down
+      // the camera ray (parallax-corrected so close shots still land)
+      let aimPoint = null;
+      const shootables = [];
+      for (const e of w.registry) if (e.alive) shootables.push(e.group);
+      for (const bomb of w.bombPool.active) shootables.push(bomb.group);
+      if (shootables.length) {
+        const hits = w.aim.ray.intersectObjects(shootables, true);
+        if (hits.length > 0) aimPoint = hits[0].point;
+      }
+      if (!aimPoint) {
+        aimPoint = w.aim.ray.ray.direction.clone().multiplyScalar(600).add(w.camera.position);
+      }
+      const dir = aimPoint.sub(muzzle).normalize();
+      if (w.bulletPool.fire(muzzle, dir)) {
+        w.audio.play('zap');
+        w.firePool.spawn(muzzle.x, muzzle.y, muzzle.z, {
+          count: 3, speedMin: 1, speedMax: 3, upBias: 0.5,
+          color0: [0.3, 0.8, 1], color1: [0.05, 0.15, 0.4],
+          lifeMin: 0.08, lifeMax: 0.2, sizeMin: 0.3, sizeMax: 0.8,
+        });
+      }
+    }
+
+    resolveBullets(dt) {
+      const w = this.world;
+      const pool = w.bulletPool;
+      if (pool.active.length === 0) return;
+      const city = w.city;
+      this.ray.far = 2000;
+
+      for (const b of pool.active.slice()) {
+        const travel = pool.speed * Math.max(dt, 0.02) + 3;
+        this.ray.set(b.pos, b.dir, 0, travel);
+
+        // 1) enemies + bombs first (they're the targets)
+        let hit = null;
+        const shootables = [];
+        for (const e of w.registry) if (e.alive) shootables.push(e.group);
+        for (const bomb of w.bombPool.active) shootables.push(bomb.group);
+        if (shootables.length) {
+          const hits = this.ray.intersectObjects(shootables, true);
+          if (hits.length > 0) hit = hits[0];
+        }
+
+        if (hit) {
+          // walk up to the owning enemy / bomb group
+          let node = hit.object;
+          while (node && node.userData.owner === undefined && node.parent) node = node.parent;
+          const e = node && node.userData.owner;
+          if (e) {
+            pool.release(b);
+            w.fx.spawn(hit.point.clone(), 0x00e5ff, 0.7);
+            const killed = e.damage(CONFIG.fire.bulletDamage, hit.point);
+            if (killed && e.scoreAward) w.score.add(e.scoreAward);
+            continue;
+          }
+        }
+
+        // 2) buildings / landmark — friendly fire costs points, not HP
+        if (city) {
+          const bh = this.ray.intersectObject(city.buildings.mesh, false);
+          if (bh.length > 0) {
+            const id = bh[0].instanceId;
+            if (!w.integrity.isRuined(id)) {
+              pool.release(b);
+              w.fx.spawn(bh[0].point.clone(), 0xffd166, 0.5);
+              w.audio.play('spark');
+              w.score.subtract(SCORE_TABLE.FRIENDLY_BUILDING);
+              continue;
+            }
+          }
+          const lm = city.landmark;
+          if (lm.alive && lm.group.visible && !w.integrity.isRuined('landmark')) {
+            const lh = this.ray.intersectObject(lm.group, true);
+            if (lh.length > 0) {
+              pool.release(b);
+              w.fx.spawn(lh[0].point.clone(), 0xffd166, 0.5);
+              w.audio.play('spark');
+              w.score.subtract(SCORE_TABLE.FRIENDLY_BUILDING);
+              continue;
+            }
+          }
+        }
+
+        // 3) cars — traffic is also protected
+        if (w.cars) {
+          let carHit = null;
+          for (const car of w.cars.cars) {
+            if (!car.visible || car.userData.popped) continue;
+            const cp = car.position;
+            const t = this.ray.ray.direction.dot(this.tmpV.copy(cp).sub(b.pos));
+            if (t < 0 || t > travel) continue;
+            const dist = this.ray.ray.distanceSqToPoint(this.tmpV.set(cp.x, cp.y + 0.5, cp.z));
+            if (dist < 2.8) { carHit = car; break; }
+          }
+          if (carHit) {
+            pool.release(b);
+            w.cars.pop(carHit);
+            w.fx.spawn(new THREE.Vector3(carHit.position.x, 1, carHit.position.z), 0xff8844, 1);
+            w.game.explode(carHit.position.x, 1, carHit.position.z, 0.7);
+            w.audio.play('smallExplosion');
+            w.score.subtract(SCORE_TABLE.FRIENDLY_CAR);
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================================================
+  //  THE GAME ORCHESTRATOR — thin state coordinator (SRP: systems do the work)
   // ============================================================================
 
   class Game {
     constructor() {
       this.city = null;
       this.cityName = null;
-      this.switching = false;
-      this.mothership = null;
-      this.beams = null;
-      this.fx = null;
-      this.dots = null;
-      this.firePool = null;
-      this.smokePool = null;
-      this.scouts = null;
-      this.cars = null;
-      this.aliensWon = false;
-      this.timers = new Set();     // tracked gsap delayedCalls
-      this.autoTimer = null;
-      this.shakeAmp = 0;
+      this.cityChoice = 'New York';
       this.time = 0;
-      this.hovered = null;         // hovered building (for highlight)
+      this.shakeAmp = 0;
+      this.timeScale = 1;
+      this.losing = false;
+      this.timers = new Set();
       this.lastPrune = 0;
+      this.attractTimer = null;
+      this.world = null;
     }
 
-    start() {
-      this.mothership = new Mothership(sceneGroup);
-      this.beams = new BeamPool(sceneGroup);
-      this.fx = new ImpactFX(sceneGroup);
-      this.dots = new DotPool(sceneGroup);
-      this.firePool = new ParticlePool(sceneGroup, {
+    init() {
+      const world = this.world = {};
+      world.game = this;
+      world.scene = scene;
+      world.sceneGroup = sceneGroup;
+      world.camera = camera;
+      world.renderer = renderer;
+      world.gameMachine = new GameStateMachine();
+      world.fx = new ImpactFX(sceneGroup);
+      world.dots = new DotPool(sceneGroup);
+      world.firePool = new ParticlePool(sceneGroup, {
         max: CONFIG.fireMax, blending: THREE.AdditiveBlending,
         gravity: -6, drag: 0.985, growth: -0.5,
       });
-      this.smokePool = new ParticlePool(sceneGroup, {
+      world.smokePool = new ParticlePool(sceneGroup, {
         max: CONFIG.smokeMax, blending: THREE.NormalBlending,
         gravity: 3.5, drag: 0.975, growth: 2.0,
       });
-      this.scouts = new ScoutFleet(sceneGroup);
-      this.cars = new CarRig(sceneGroup);
-      this.switchCity(params.city, true);
+      world.beams = new BeamPool(sceneGroup);
+      world.cars = new CarRig(sceneGroup);
+      world.audio = new AudioManager();
+      world.hud = new HUD();
+      world.score = new ScoreKeeper(world.hud);
+      world.aim = new AimController(document.getElementById('crosshair'));
+      world.bulletPool = new BulletPool(sceneGroup);
+      world.enemyShots = new EnemyShotPool(sceneGroup);
+      world.bombPool = new BombPool(sceneGroup, world);
+      world.time = 0;
+      world.registry = [];
+      world.boss = null;
+      world.waveNumber = 1;
+      // attract-mode visuals (active behind the menu)
+      world.mothership = new Mothership(sceneGroup);
+      world.scouts = new ScoutFleet(sceneGroup);
+      world.drone = null;
+      world.integrity = null;
+      world.combat = new CombatController(world);
+      world.waveDirector = new WaveDirector(world);
+
+      const machine = world.gameMachine;
+      machine.on(GameState.MENU, () => this.onMenu());
+      machine.on(GameState.WAVE_BANNER, p => this.onWaveBanner(p));
+      machine.on(GameState.PLAYING, () => this.onPlaying());
+      machine.on(GameState.GAME_OVER, () => this.onGameOver());
+      machine.on(GameState.VICTORY, () => this.onVictory());
+
+      // attract mode: a living city behind the start menu
+      this.buildCity(this.cityChoice);
+      world.hud.setCityLabel(CITY_PROFILES[this.cityChoice].name);
+      world.hud.setHiScore(world.score.getHighScore());
+      machine.setState(GameState.MENU);
+    }
+
+    // ---------------- state handlers ----------------
+
+    onMenu() {
+      const world = this.world;
+      this.killAttract();
+      world.combat.firing = false;
+      this.cancelRunState();
+      world.hud.showMenu(true);
+      world.hud.hideScreen();
+      world.hud.showHud(false);
+      document.body.classList.remove('playing');
+      world.mothership.group.visible = true;
+      for (const s of world.scouts.ships) s.group.visible = true;
+      this.attractLoop();
+    }
+
+    onWaveBanner(p) {
+      const world = this.world;
+      world.waveNumber = p.wave;
+      world.hud.setWave(p.wave);
+      world.hud.showWaveBanner(p.wave, () => {
+        if (world.gameMachine.state === GameState.WAVE_BANNER) {
+          world.gameMachine.setState(GameState.PLAYING);
+        }
+      });
+    }
+
+    onPlaying() {
+      const world = this.world;
+      world.hud.hideBanner();
+      world.waveDirector.spawnWave(world.waveDirector.wave);
+    }
+
+    onGameOver() {
+      const world = this.world;
+      this.losing = false;
+      this.timeScale = 1;
+      world.combat.firing = false;
+      world.hud.flashStun(false);
+      world.hud.showHud(false);
+      world.hud.hideBanner();
+      world.score.saveHighScore();
+      const hi = world.score.getHighScore();
+      world.hud.setHiScore(hi);
+      world.hud.showScreen('gameover', world.score.score, hi, world.score.score === hi && world.score.score > 0);
+    }
+
+    onVictory() {
+      const world = this.world;
+      this.losing = false;
+      this.timeScale = 1;
+      world.combat.firing = false;
+      world.hud.flashStun(false);
+      world.hud.showHud(false);
+      world.hud.hideBanner();
+      world.hud.setEnemyCount(0);
+      world.score.saveHighScore();
+      const hi = world.score.getHighScore();
+      world.hud.setHiScore(hi);
+      world.hud.showScreen('victory', world.score.score, hi, world.score.score === hi && world.score.score > 0);
+    }
+
+    // ---------------- run lifecycle ----------------
+
+    startRun(cityName) {
+      const world = this.world;
+      this.losing = false;
+      this.timeScale = 1;
+      world.score.reset();
+      world.hud.setHiScore(world.score.getHighScore());
+      this.killAttract();
+      this.cancelRunState();
+      this.disposeCity(this.city);
+      this.buildCity(cityName);
+      world.hud.setCityLabel(CITY_PROFILES[cityName].name);
+      world.hud.showHud(true);
+      world.hud.hideScreen();
+      world.hud.showMenu(false);
+      world.mothership.group.visible = false;
+      for (const s of world.scouts.ships) s.group.visible = false;
+      if (!world.drone) {
+        world.drone = new PlayerDrone(sceneGroup, world, 0, CONFIG.drone.altitude);
+      }
+      world.drone.reset(CITY_PROFILES[cityName].radius * CONFIG.drone.radiusScale);
+      document.body.classList.add('playing');
+      world.waveDirector.start();
+    }
+
+    gameOver() {
+      if (this.losing) return;
+      const st = this.world.gameMachine.state;
+      if (st === GameState.MENU || st === GameState.GAME_OVER || st === GameState.VICTORY) return;
+      this.losing = true;
+      this.timeScale = 0.35;
+      this.world.audio.play('gameover');
+      gsap.fromTo('#redFlash', { opacity: 0.7 }, {
+        opacity: 0, duration: 0.9, ease: 'power2.in',
+      });
+      this.delayed(1.8, () => {
+        if (this.losing &&
+            (this.world.gameMachine.state === GameState.PLAYING || this.world.gameMachine.state === GameState.WAVE_BANNER)) {
+          this.world.gameMachine.setState(GameState.GAME_OVER);
+        }
+      });
+    }
+
+    onBossDefeated() {
+      this.world.gameMachine.setState(GameState.VICTORY);
+    }
+
+    cancelRunState() {
+      const world = this.world;
+      for (const e of world.registry) world.sceneGroup.remove(e.group);
+      world.registry.length = 0;
+      world.bombPool.releaseAll();
+      world.bulletPool.releaseAll();
+      world.enemyShots.releaseAll();
+      for (const b of world.beams.active.slice()) world.beams.release(b);
+      world.hud.setBossHp(null);
+      world.hud.flashStun(false);
+      world.hud.setEnemyCount(0);
+      world.combat.stunUntil = -1;
+      world.combat.firing = false;
+      world.boss = null;
+      world.pending = null;
     }
 
     // ---------------- city management ----------------
 
-    switchCity(name, immediate = false) {
-      if (this.switching || name === this.cityName) return;
-      if (immediate) {
-        this.buildCity(name);
-        this.scheduleAutoAttack();
-        return;
-      }
-      this.switching = true;
-      this.cancelAll();
-      this.mothership.returnHome();
-
-      const old = this.city;
-      const tl = gsap.timeline({
-        onComplete: () => {
-          this.disposeCity(old);
-          this.buildCity(name);
-          this.switching = false;
-          this.scheduleAutoAttack();
-          // dramatic arrival strike on the fresh city
-          this.track(gsap.delayedCall(1.1, () => this.randomAttack()));
-        },
-      });
-      tl.to(old.group.scale, { x: 0.001, y: 0.001, z: 0.001, duration: 0.85, ease: 'power2.in' }, 0)
-        .add(() => {
-          // dissolve sparks at the old city's heart
-          this.firePool.spawn(0, 10, 0, {
-            count: 120, speedMin: 2, speedMax: 12, upBias: 16,
-            color0: [0.4, 0.5, 1], color1: [0.05, 0.1, 0.3],
-            lifeMin: 0.4, lifeMax: 1.4, sizeMin: 0.5, sizeMax: 2.2,
-          });
-        }, 0.35);
-
-      // HUD label swap
-      const label = document.getElementById('cityLabel');
-      gsap.to(label, { opacity: 0, duration: 0.3, onComplete: () => {
-        label.textContent = CITY_PROFILES[name].name;
-        gsap.fromTo(label, { opacity: 0, letterSpacing: '14px' }, { opacity: 1, letterSpacing: '6px', duration: 0.6, ease: 'power2.out' });
-      }});
-    }
-
     buildCity(name) {
+      const world = this.world;
       this.city = CityGenerator.build(name);
       this.cityName = name;
-      this.city.group.scale.setScalar(0.001);
       sceneGroup.add(this.city.group);
-      gsap.to(this.city.group.scale, { x: 1, y: 1, z: 1, duration: 1.1, ease: 'power2.out' });
-      // arrival shockwave
-      this.fx.spawn(new THREE.Vector3(0, 0, 0), 0x00e5ff, 1.6);
-      this.updateIntegrity();
-      this.cars.place(this.city);
-      // fresh round — the aliens can lose again
-      if (this.aliensWon) {
-        this.aliensWon = false;
-        gsap.to('#victory', { opacity: 0, duration: 0.35 });
-      }
-      // spawn a few ambient particles drifting up from the city
-      this.spawnAmbientSmoke();
-    }
-
-    spawnAmbientSmoke() {
-      for (let i = 0; i < 6; i++) {
-        this.track(gsap.delayedCall(0.4 + i * 0.5, () => {
-          if (!this.city) return;
-          const b = this.randomAliveBuilding();
-          if (!b) return;
-          this.smokePool.spawn(b.x, b.h * 0.7, b.z, {
-            count: 8, speedMin: 0.6, speedMax: 1.6, upBias: 4,
-            color0: [0.25, 0.24, 0.28], color1: [0.08, 0.08, 0.1],
-            lifeMin: 2, lifeMax: 4, sizeMin: 1.5, sizeMax: 3.5,
-          });
-        }));
-      }
+      world.integrity = new CityIntegrity(world, this.city);
+      world.cars.place(this.city);
+      world.cars.restore();
+      world.fx.spawn(new THREE.Vector3(0, 0.2, 0), 0x00e5ff, 2.2);
+      if (world.hud) world.hud.setCityHp(1);
     }
 
     disposeCity(city) {
+      if (!city) return;
       sceneGroup.remove(city.group);
-      // remove leftover rubble meshes
       for (const r of city.rubble) {
         sceneGroup.remove(r.group);
         r.group.traverse(o => {
           if (o.geometry) o.geometry.dispose();
-          if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => m.dispose()); }
+          if (o.material) {
+            const ms = Array.isArray(o.material) ? o.material : [o.material];
+            ms.forEach(m => m.dispose());
+          }
         });
       }
       city.rubble.length = 0;
@@ -2117,61 +3695,365 @@
           });
         }
       });
-      // fade out leftover particles from this city
+      this.world.firePool.clear();
+      this.world.smokePool.clear();
+      this.world.fx.releaseAll();
+    }
+
+    // ---------------- attract mode (behind the menu) ----------------
+
+    attractLoop() {
+      const world = this.world;
+      const tick = () => {
+        if (world.gameMachine.state !== GameState.MENU || !this.city) return;
+        const target = world.integrity.getRandomAlive();
+        if (target) this.attractFire(target.id, target.x, target.topY, target.z);
+        this.attractTimer = this.delayed(4 + Math.random() * 4, tick);
+      };
+      this.attractTimer = this.delayed(1.5, tick);
+    }
+
+    killAttract() {
+      if (this.attractTimer) { try { this.attractTimer.kill(); } catch (e) { /* done */ } }
+      this.attractTimer = null;
+      if (this.world && this.world.mothership) {
+        gsap.killTweensOf(this.world.mothership.emitterMat);
+      }
+    }
+
+    attractFire(id, x, topY, z) {
+      const world = this.world;
+      const ship = world.mothership;
+      if (world.gameMachine.state !== GameState.MENU) return;
+      ship.faceToward(Math.atan2(x - ship.group.position.x, z - ship.group.position.z));
+      ship.driftTo(x, z);
+
+      const dot = world.dots.acquire(new THREE.Vector3(x, topY, z));
+      gsap.to(ship.emitterMat, {
+        opacity: 0.95, duration: 0.16, yoyo: true, repeat: 1,
+        onComplete: () => { ship.emitterMat.opacity = 0.28; },
+      });
+      this.delayed(0.22, () => {
+        if (world.gameMachine.state !== GameState.MENU) { world.dots.release(dot); return; }
+        const beam = world.beams.acquire();
+        if (!beam) { world.dots.release(dot); return; }
+        const from = ship.bellyWorld(new THREE.Vector3());
+        const to = new THREE.Vector3(x, topY, z);
+        world.beams.setTransform(beam, from, to);
+        const tl = gsap.timeline();
+        tl.to(beam.mesh.scale, { x: 1.15, z: 1.15, duration: 0.16, ease: 'power2.out' }, 0)
+          .to(beam.mat.uniforms.uAlpha, { value: 1, duration: 0.1 }, 0)
+          .add(() => world.dots.release(dot), 0.05)
+          .call(() => {
+            if (world.integrity && world.gameMachine.state === GameState.MENU) {
+              world.integrity.damageBuilding(id, 85);
+              world.fx.spawn(new THREE.Vector3(x, topY, z), 0xff6a00, 1);
+            }
+          }, undefined, 0.24)
+          .to(beam.mesh.scale, { x: 0.01, z: 0.01, y: 0.3, duration: 0.4, ease: 'power2.in' }, 0.4)
+          .to(beam.mat.uniforms.uAlpha, { value: 0, duration: 0.3 }, 0.4)
+          .call(() => world.beams.release(beam), undefined, 0.85);
+      });
+    }
+
+    // ---------------- shared helpers ----------------
+
+    explode(x, y, z, power = 1) {
+      this.world.firePool.spawn(x, y, z, {
+        count: Math.round(70 * power),
+        speedMin: 4, speedMax: 6 + 12 * power, upBias: 7 + 9 * power,
+        color0: [1.0, 0.72, 0.2], color1: [0.55, 0.08, 0.02],
+        lifeMin: 0.5, lifeMax: 1.6, sizeMin: 0.5, sizeMax: 2.3,
+      });
+      this.world.smokePool.spawn(x, y, z, {
+        count: Math.round(40 * power),
+        speedMin: 1.5, speedMax: 4 + 3 * power, upBias: 5 + 5 * power,
+        color0: [0.34, 0.29, 0.31], color1: [0.06, 0.06, 0.08],
+        lifeMin: 1.2, lifeMax: 2.8, sizeMin: 1.4, sizeMax: 4.2,
+      });
+    }
+
+    shake(amp) { this.shakeAmp = Math.max(this.shakeAmp, amp); }
+
+    delayed(sec, fn) {
+      const t = gsap.delayedCall(sec, fn);
+      this.timers.add(t);
+      return t;
+    }
+
+    pruneTimers() {
+      if (this.timers.size === 0) return;
+      for (const t of Array.from(this.timers)) {
+        try {
+          if (typeof t.progress === 'function' && t.progress() >= 1) this.timers.delete(t);
+        } catch (e) {
+          this.timers.delete(t);
+        }
+      }
+    }
+
+    // ---------------- cameras ----------------
+
+    menuCam(dt) {
+      camera.position.set(
+        Math.cos(this.time * 0.07) * 185,
+        78 + Math.sin(this.time * 0.1) * 10,
+        Math.sin(this.time * 0.07) * 185
+      );
+      camera.lookAt(0, 18, 0);
+    }
+
+    chaseCam(dt) {
+      const d = this.world.drone;
+      if (!d) return;
+      const want = d.pos.clone()
+        .addScaledVector(d.fwd, -CONFIG.cam.dist)
+        .add(new THREE.Vector3(0, CONFIG.cam.up, 0));
+      camera.position.lerp(want, Math.min(1, dt * CONFIG.cam.lerp));
+      camera.lookAt(d.pos.clone().addScaledVector(d.fwd, CONFIG.cam.lookAhead));
+    }
+
+    // ---------------- per-frame ----------------
+
+    update(dt) {
+      const world = this.world;
+      this.time += dt;
+      world.time = this.time;
+      const t = this.time;
+      const st = world.gameMachine.state;
+
+      if (t - this.lastPrune > 1) {
+        this.lastPrune = t;
+        this.pruneTimers();
+      }
+
+      // ambient systems run at full speed everywhere
+      world.cars.update(dt);
+      world.beams.update(t);
+      world.fx.update(dt);
+      world.firePool.update(dt);
+      world.smokePool.update(dt);
+
+      const targetShip = (st === GameState.PLAYING && world.boss) ? world.boss.ship.group : world.mothership.group;
+      for (const sl of searchlights) updateSearchlight(sl, dt, t, targetShip.position);
+
+      if (this.city && this.city.beacons) {
+        this.city.beacons.material.opacity = 0.6 + 0.4 * Math.sin(t * 2.4);
+      }
+
+      const sdt = dt * this.timeScale;
+
+      if (st === GameState.MENU) {
+        world.mothership.update(dt, t);
+        world.scouts.update(dt, t);
+        this.menuCam(dt);
+      } else if (st === GameState.PLAYING) {
+        // the building shader clock stays live during play
+        if (this.city) this.city.buildings.mesh.material.uniforms.uTime.value = t;
+        world.drone.update(sdt, t);
+        this.chaseCam(dt);
+        world.aim.update(camera);
+        world.combat.update(dt);
+        world.enemyShots.update(sdt);
+        world.bombPool.update(sdt);
+        for (let i = world.registry.length - 1; i >= 0; i--) {
+          const e = world.registry[i];
+          if (e.alive) e.update(sdt, t, world);
+          else world.registry.splice(i, 1);
+        }
+        world.waveDirector.update(sdt);
+        world.hud.setEnemyCount(world.registry.reduce((n, e) => n + (e.alive ? 1 : 0), 0));
+      } else {
+        // WAVE_BANNER / GAME_OVER / VICTORY: keep the world breathing
+        if (world.drone) { world.drone.update(sdt, t); this.chaseCam(dt); }
+        world.enemyShots.update(sdt);
+        world.bombPool.update(sdt);
+        for (let i = world.registry.length - 1; i >= 0; i--) {
+          const e = world.registry[i];
+          if (e.alive) e.update(sdt, t, world);
+          else world.registry.splice(i, 1);
+        }
+        if (st === GameState.WAVE_BANNER) {
+          world.hud.setEnemyCount(world.registry.reduce((n, e) => n + (e.alive ? 1 : 0), 0));
+        }
+      }
+
+      // camera shake
+      if (this.shakeAmp > 0.001) {
+        sceneGroup.position.set(
+          (Math.random() - 0.5) * this.shakeAmp,
+          (Math.random() - 0.5) * this.shakeAmp * 0.5,
+          (Math.random() - 0.5) * this.shakeAmp
+        );
+        this.shakeAmp *= Math.exp(-dt * 5.2);
+      } else {
+        sceneGroup.position.set(0, 0, 0);
+      }
+    }
+  }
+
+  // ============================================================================
+  //  LEGACY DEMO MODE (?demo=1) — original OrbitControls + lil-gui experience
+  // ============================================================================
+
+  class LegacyDemo {
+    constructor() {
+      this.city = null;
+      this.cityName = null;
+      this.time = 0;
+      this.shakeAmp = 0;
+      this.timers = new Set();
+      this.autoTimer = null;
+      this.mothership = new Mothership(sceneGroup);
+      this.beams = new BeamPool(sceneGroup);
+      this.fx = new ImpactFX(sceneGroup);
+      this.dots = new DotPool(sceneGroup);
+      this.firePool = new ParticlePool(sceneGroup, {
+        max: CONFIG.fireMax, blending: THREE.AdditiveBlending,
+        gravity: -6, drag: 0.985, growth: -0.5,
+      });
+      this.smokePool = new ParticlePool(sceneGroup, {
+        max: CONFIG.smokeMax, blending: THREE.NormalBlending,
+        gravity: 3.5, drag: 0.975, growth: 2.0,
+      });
+      this.scouts = new ScoutFleet(sceneGroup);
+      this.cars = new CarRig(sceneGroup);
+      this.intensity = 5;
+      this.hovered = null;
+      this.lastPrune = 0;
+      this.aliensWon = false;
+      this.buildCity('New York');
+      this.scheduleAutoAttack();
+    }
+
+    buildCity(name) {
+      this.city = CityGenerator.build(name);
+      this.cityName = name;
+      sceneGroup.add(this.city.group);
+      this.cars.place(this.city);
+    }
+
+    switchCity(name) {
+      if (name === this.cityName || !this.city) return;
+      this.cancelAll();
+      this.disposeCity(this.city);
+      this.buildCity(name);
+      this.scheduleAutoAttack();
+    }
+
+    disposeCity(city) {
+      sceneGroup.remove(city.group);
+      for (const r of city.rubble) {
+        sceneGroup.remove(r.group);
+        r.group.traverse(o => {
+          if (o.geometry) o.geometry.dispose();
+          if (o.material) {
+            const ms = Array.isArray(o.material) ? o.material : [o.material];
+            ms.forEach(m => m.dispose());
+          }
+        });
+      }
+      city.rubble.length = 0;
+      city.group.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          const ms = Array.isArray(o.material) ? o.material : [o.material];
+          ms.forEach(m => {
+            if (m.map) m.map.dispose();
+            if (m.emissiveMap) m.emissiveMap.dispose();
+            m.dispose();
+          });
+        }
+      });
       this.firePool.clear();
       this.smokePool.clear();
     }
 
-    // ---------------- targeting / attacks ----------------
+    track(t) { this.timers.add(t); return t; }
 
-    aliveBuildings() {
-      if (!this.city) return [];
-      return this.city.buildings.list.filter(b => b.alive);
+    pruneTimers() {
+      if (this.timers.size === 0) return;
+      for (const t of Array.from(this.timers)) {
+        try {
+          if (typeof t.progress === 'function' && t.progress() >= 1) this.timers.delete(t);
+        } catch (e) { this.timers.delete(t); }
+      }
     }
 
-    randomAliveBuilding() {
-      const alive = this.aliveBuildings();
-      if (alive.length === 0) return null;
-      return alive[(Math.random() * alive.length) | 0];
+    cancelAll() {
+      for (const t of this.timers) { try { t.kill(); } catch (e) { /* done */ } }
+      this.timers.clear();
+      if (this.autoTimer) { this.autoTimer.kill(); this.autoTimer = null; }
+      gsap.killTweensOf(this.mothership.emitterMat);
+      if (this.beams) {
+        for (const b of this.beams.active.slice()) this.beams.release(b);
+      }
+      this.firePool.clear();
+      this.smokePool.clear();
+      this.fx.releaseAll();
+      this.hovered = null;
+      this.shakeAmp = 0;
     }
 
-    randomTarget() {
-      // 25% chance to hit the landmark if it is still standing
-      if (this.city && this.city.landmark.alive && Math.random() < 0.25) return this.city.landmark;
-      return this.randomAliveBuilding();
+    scheduleAutoAttack() {
+      if (this.autoTimer) this.autoTimer.kill();
+      if (this.intensity <= 0) { this.autoTimer = null; return; }
+      const interval = 13 * Math.pow(0.82, this.intensity) + 0.8;
+      const jitter = (Math.random() - 0.5) * interval * 0.5;
+      this.autoTimer = this.track(gsap.delayedCall(Math.max(0.6, interval + jitter), () => {
+        this.randomAttack();
+        this.scheduleAutoAttack();
+      }));
+    }
+
+    randomAttack() {
+      if (!this.city) return;
+      const alive = this.city.buildings.list.filter(b => b.alive);
+      if (this.city.landmark.alive && Math.random() < 0.25) {
+        this.fireLandmark();
+        return;
+      }
+      if (!alive.length) return;
+      this.fireAt(alive[(Math.random() * alive.length) | 0]);
+    }
+
+    fireLandmark() {
+      const lm = this.city.landmark;
+      const topY = lm.height * 0.8;
+      this.fireBeam(new THREE.Vector3(0, topY, 0), () => this.collapseLandmark(lm));
     }
 
     fireAt(building) {
-      if (!building || !building.alive || this.switching) return;
+      if (!building || !building.alive) return;
+      const topY = building.h * 0.8;
+      this.fireBeam(new THREE.Vector3(building.x, topY, building.z), () => this.destroyBuilding(building));
+    }
+
+    fireBeam(to, onImpact) {
       const ship = this.mothership;
-
-      // face + hover toward the target
-      const dx = building.x - ship.group.position.x;
-      const dz = building.z - ship.group.position.z;
-      ship.faceToward(Math.atan2(dx, dz));
-      ship.driftTo(building.x, building.z);
-
-      // targeting dot pulses on the roof while the ship lines up
-      const topY = building.kind === 'landmark' ? building.height * 0.8 : building.h * 0.8;
-      const dot = this.dots.acquire(new THREE.Vector3(building.x, topY, building.z));
-
-      // emitter charge flash
-      gsap.to(ship.emitterMat, { opacity: 0.95, duration: 0.16, yoyo: true, repeat: 1, onComplete: () => ship.emitterMat.opacity = 0.28 });
-
-      // fire!
+      ship.faceToward(Math.atan2(to.x - ship.group.position.x, to.z - ship.group.position.z));
+      ship.driftTo(to.x, to.z);
+      const dot = this.dots.acquire(to);
+      gsap.to(ship.emitterMat, {
+        opacity: 0.95, duration: 0.16, yoyo: true, repeat: 1,
+        onComplete: () => { ship.emitterMat.opacity = 0.28; },
+      });
       this.track(gsap.delayedCall(0.22, () => {
-        if (!building.alive || this.switching || !this.city) { this.dots.release(dot); return; }
         const beam = this.beams.acquire();
         if (!beam) { this.dots.release(dot); return; }
         const from = ship.bellyWorld(new THREE.Vector3());
-        const to = new THREE.Vector3(building.x, topY, building.z);
         this.beams.setTransform(beam, from, to);
-
         const tl = gsap.timeline();
         tl.to(beam.mesh.scale, { x: 1.15, z: 1.15, duration: 0.16, ease: 'power2.out' }, 0)
           .to(beam.mat.uniforms.uAlpha, { value: 1, duration: 0.1 }, 0)
           .add(() => this.dots.release(dot), 0.05)
-          .call(() => this.impact(building), undefined, 0.24)
+          .call(() => {
+            this.fx.spawn(new THREE.Vector3(to.x, 0.2, to.z), 0xff6a00, 1);
+            this.fx.spawn(new THREE.Vector3(to.x, 0.2, to.z), 0xffe9b0, 0.45);
+            this.explode(to.x, to.y * 0.5, to.z, 1);
+            if (onImpact) onImpact();
+            this.shakeAmp = Math.min(this.shakeAmp + 0.5, 0.65);
+          }, undefined, 0.24)
           .to(beam.mesh.scale, { x: 0.01, z: 0.01, y: 0.3, duration: 0.4, ease: 'power2.in' }, 0.4)
           .to(beam.mat.uniforms.uAlpha, { value: 0, duration: 0.3 }, 0.4)
           .call(() => this.beams.release(beam), undefined, 0.85);
@@ -2179,28 +4061,7 @@
       }));
     }
 
-    impact(building) {
-      if (!building.alive) return;
-      const gx = building.x, gz = building.z;
-      // ground FX at the impact column
-      this.fx.spawn(new THREE.Vector3(gx, 0.2, gz), 0xff6a00, 1);
-      // second, tighter ring for punch
-      this.fx.spawn(new THREE.Vector3(gx, 0.2, gz), 0xffe9b0, 0.45);
-
-      // fire + smoke at the base of the building
-      const boomY = building.kind === 'landmark' ? building.height * 0.45 : building.h * 0.4;
-      this.explode(gx, boomY, gz, 1);
-
-      // crumble the building
-      this.destroyBuilding(building);
-
-      // camera kick
-      const dist = camera.position.distanceTo(new THREE.Vector3(gx, 20, gz));
-      this.shakeAmp = Math.min(this.shakeAmp + 0.5 / (1 + dist * 0.012), 0.65);
-    }
-
     explode(x, y, z, power = 1) {
-      if (!params.particles) return;
       this.firePool.spawn(x, y, z, {
         count: Math.round(70 * power),
         speedMin: 4, speedMax: 6 + 12 * power, upBias: 7 + 9 * power,
@@ -2215,33 +4076,19 @@
       });
     }
 
-    destroyBuilding(building) {
-      if (!building.alive) return;
-      building.alive = false;
-      if (this.hovered === building) this.hovered = null;
+    destroyBuilding(b) {
+      if (!b.alive) return;
+      b.alive = false;
+      if (this.hovered === b) this.hovered = null;
       if (this.city) this.city.aliveCount = Math.max(0, this.city.aliveCount - 1);
+      if (this.city && this.city.aliveCount === 0 && !this.city.landmark.alive) this.alienVictory();
 
-      // every building AND the landmark lies in ruins -> the aliens won
-      if (this.city && this.city.aliveCount === 0 && !this.city.landmark.alive) {
-        this.alienVictory();
-      }
-
-      if (building.kind === 'landmark') {
-        this.collapseLandmark(building);
-        return;
-      }
-
-      const b = building;
       const city = this.city;
       const mesh = city.buildings.mesh;
-
-      // shrink the instanced building away
       const m = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
       m.setPosition(b.x, 0.001, b.z);
       mesh.setMatrixAt(b.index, m);
       mesh.instanceMatrix.needsUpdate = true;
-
-      // kill its antenna + beacon
       if (b.antennaIndex >= 0 && city.antennas) {
         const am = new THREE.Matrix4().makeScale(0.001, 0.001, 0.001);
         am.setPosition(b.x, 0.001, b.z);
@@ -2255,21 +4102,16 @@
         city.beacons.mesh.instanceMatrix.needsUpdate = true;
       }
 
-      // charred rubble stub that "crumples"
       const rubble = new THREE.Group();
       const stub = new THREE.Mesh(
         new THREE.BoxGeometry(b.w, b.h, b.d),
-        new THREE.MeshStandardMaterial({
-          color: 0x0a0a0c, roughness: 1, metalness: 0,
-          emissive: 0xff2a00, emissiveIntensity: 0.35,
-        })
+        new THREE.MeshStandardMaterial({ color: 0x0a0a0c, roughness: 1, metalness: 0, emissive: 0xff2a00, emissiveIntensity: 0.35 })
       );
       stub.position.y = b.h / 2;
       rubble.add(stub);
       rubble.position.set(b.x, 0, b.z);
       rubble.rotation.z = (Math.random() - 0.5) * 0.08;
       rubble.rotation.x = (Math.random() - 0.5) * 0.08;
-      rubble.scale.y = 1;
       sceneGroup.add(rubble);
       city.rubble.push(rubble);
 
@@ -2285,23 +4127,16 @@
       tl.to(rubble.scale, { y: 0.1, duration: 0.85, ease: 'power2.in' }, 0)
         .to(rubble.scale, { x: 0.05, z: 0.05, duration: 0.3, ease: 'power2.in' }, 0.55)
         .to(rubble.position, { y: -0.2, duration: 0.4 }, 0.55);
-
-      this.updateIntegrity();
     }
 
     collapseLandmark(lm) {
       const group = lm.group;
-      // char the materials
       group.traverse(o => {
         if (o.isMesh && o.material) {
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           mats.forEach(m => {
-            if (m.emissive !== undefined) {
-              m.emissive = new THREE.Color(0xff2200);
-              m.emissiveIntensity = 1.4;
-            } else if (m.color !== undefined) {
-              m.color.setHex(0x331111);
-            }
+            if (m.emissive !== undefined) { m.emissive = new THREE.Color(0xff2200); m.emissiveIntensity = 1.4; }
+            else if (m.color !== undefined) m.color.setHex(0x331111);
           });
         }
         if (o.isPointLight) {
@@ -2311,77 +4146,24 @@
       });
       gsap.to(group.scale, { y: 0.12, duration: 0.9, ease: 'power2.in' });
       gsap.to(group.rotation, { z: (Math.random() - 0.5) * 0.12, duration: 0.9, ease: 'power2.in' });
+      lm.alive = false;
       this.track(gsap.delayedCall(2.4, () => { group.visible = false; }));
-      // extra debris
       this.explode(0, lm.height * 0.5, 0, 1.6);
-      this.updateIntegrity();
-    }
-
-    updateIntegrity() {
-      if (!this.city) return;
-      const pct = Math.round((this.city.aliveCount / this.city.total) * 100);
-      const el = document.getElementById('integrityVal');
-      el.textContent = pct + '%';
-      el.style.color = pct > 60 ? '#6bff9e' : pct > 30 ? '#ffd166' : '#ff5d7a';
-      gsap.fromTo(el, { scale: 1.35 }, { scale: 1, duration: 0.35, ease: 'power2.out' });
+      if (this.city.aliveCount === 0) this.alienVictory();
     }
 
     alienVictory() {
       if (this.aliensWon) return;
       this.aliensWon = true;
       console.log('%c👽 The Aliens won.', 'color:#ff5d7a;font-size:18px;font-weight:bold;text-shadow:0 0 10px #ff3b6e;');
-      const el = document.getElementById('victory');
-      gsap.killTweensOf(el);
-      gsap.fromTo(el, { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
       this.shakeAmp = Math.max(this.shakeAmp, 0.5);
     }
 
-    // ---------------- auto invasion / armageddon ----------------
-
-    scheduleAutoAttack() {
-      if (this.autoTimer) this.autoTimer.kill();
-      if (params.intensity <= 0) { this.autoTimer = null; return; }
-      const interval = 13 * Math.pow(0.82, params.intensity) + 0.8;
-      const jitter = (Math.random() - 0.5) * interval * 0.5;
-      this.autoTimer = this.track(gsap.delayedCall(Math.max(0.6, interval + jitter), () => {
-        this.randomAttack();
-        this.scheduleAutoAttack();
-      }));
-    }
-
-    randomAttack() {
-      if (this.switching || !this.city) return;
-      const target = this.randomTarget();
-      if (!target) return;
-      this.fireAt(target);
-    }
-
-    armageddon() {
-      if (!this.city || this.switching) return;
-      const targets = this.aliveBuildings();
-      // shuffle
-      for (let i = targets.length - 1; i > 0; i--) {
-        const j = (Math.random() * (i + 1)) | 0;
-        [targets[i], targets[j]] = [targets[j], targets[i]];
-      }
-      const n = Math.min(13, targets.length);
-      for (let i = 0; i < n; i++) {
-        const b = targets[i];
-        this.track(gsap.delayedCall(0.25 + i * 0.1, () => { if (b.alive) this.fireAt(b); }));
-      }
-      this.shakeAmp = Math.max(this.shakeAmp, 0.35);
-    }
-
-    // ---------------- reset ----------------
-
     resetCity() {
-      if (!this.city || this.switching) return;
+      if (!this.city) return;
       this.cancelAll();
       const city = this.city;
       this.aliensWon = false;
-      gsap.to('#victory', { opacity: 0, duration: 0.35 });
-
-      // restore instanced buildings + antennas + beacons
       const quat = new THREE.Quaternion();
       const pos = new THREE.Vector3();
       const scl = new THREE.Vector3();
@@ -2417,8 +4199,6 @@
         });
         city.beacons.mesh.instanceMatrix.needsUpdate = true;
       }
-
-      // restore landmark from its stored pristine look
       const lm = city.landmark;
       lm.alive = true;
       lm.group.visible = true;
@@ -2434,87 +4214,53 @@
           mats.forEach(m => {
             if (seen.has(m) || !m.userData.orig) return;
             seen.add(m);
-            if (m.emissive !== undefined) {
-              m.emissive.copy(m.userData.orig.e);
-              m.emissiveIntensity = m.userData.orig.ei;
-            }
+            if (m.emissive !== undefined) { m.emissive.copy(m.userData.orig.e); m.emissiveIntensity = m.userData.orig.ei; }
             if (m.color !== undefined) m.color.copy(m.userData.orig.c);
           });
         }
       });
-
-      // clear rubble
       for (const r of city.rubble) {
         gsap.killTweensOf(r);
         sceneGroup.remove(r);
         r.traverse(o => {
           if (o.geometry) o.geometry.dispose();
-          if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(mm => mm.dispose()); }
+          if (o.material) {
+            const ms = Array.isArray(o.material) ? o.material : [o.material];
+            ms.forEach(mm => mm.dispose());
+          }
         });
       }
       city.rubble.length = 0;
-
-      // clean FX + particles
       this.firePool.clear();
       this.smokePool.clear();
       this.fx.releaseAll();
       this.mothership.returnHome();
       this.hovered = null;
-      this.updateIntegrity();
-      this.scheduleAutoAttack();
-      // celebration shockwave
       this.fx.spawn(new THREE.Vector3(0, 0.2, 0), 0x00e5ff, 1.8);
     }
 
-    // ---------------- helpers ----------------
-
-    track(t) {
-      // NOTE: never touch a delayedCall's onComplete — gsap.delayedCall stores
-      // the user callback *as* the tween's onComplete; replacing it would
-      // neuter the attack pipeline. Finished tweens are pruned lazily instead.
-      this.timers.add(t);
-      return t;
-    }
-
-    pruneTimers() {
-      if (this.timers.size === 0) return;
-      for (const t of Array.from(this.timers)) {
-        try {
-          if (typeof t.progress === 'function' && t.progress() >= 1) this.timers.delete(t);
-        } catch (e) {
-          this.timers.delete(t);
-        }
+    armageddon() {
+      if (!this.city) return;
+      const targets = this.city.buildings.list.filter(b => b.alive);
+      for (let i = targets.length - 1; i > 0; i--) {
+        const j = (Math.random() * (i + 1)) | 0;
+        [targets[i], targets[j]] = [targets[j], targets[i]];
       }
-    }
-
-    cancelAll() {
-      for (const t of this.timers) {
-        try { t.kill(); } catch (e) { /* already finished */ }
+      const n = Math.min(13, targets.length);
+      for (let i = 0; i < n; i++) {
+        const b = targets[i];
+        this.track(gsap.delayedCall(0.25 + i * 0.1, () => { if (b.alive) this.fireAt(b); }));
       }
-      this.timers.clear();
-      if (this.autoTimer) { this.autoTimer.kill(); this.autoTimer = null; }
-      gsap.killTweensOf(this.mothership.emitterMat);
-      if (this.beams) {
-        for (const b of this.beams.active.slice()) this.beams.release(b);
-      }
-      if (this.firePool) this.firePool.clear();
-      if (this.smokePool) this.smokePool.clear();
-      this.hovered = null;
-      this.shakeAmp = 0;
+      this.shakeAmp = Math.max(this.shakeAmp, 0.35);
     }
-
-    // ---------------- per-frame ----------------
 
     update(dt) {
       this.time += dt;
       const t = this.time;
-
-      // lazily forget finished tracked tweens (once per second)
       if (t - this.lastPrune > 1) {
         this.lastPrune = t;
         this.pruneTimers();
       }
-
       this.mothership.update(dt, t);
       this.scouts.update(dt, t);
       this.cars.update(dt);
@@ -2522,18 +4268,10 @@
       this.fx.update(dt);
       this.firePool.update(dt);
       this.smokePool.update(dt);
-
-      // beacon pulse
       if (this.city && this.city.beacons) {
         this.city.beacons.material.opacity = 0.6 + 0.4 * Math.sin(t * 2.4);
       }
-
-      // anti-aircraft searchlights converge on the mothership
-      for (const sl of searchlights) {
-        updateSearchlight(sl, dt, t, this.mothership.group.position);
-      }
-
-      // camera shake
+      for (const sl of searchlights) updateSearchlight(sl, dt, t, this.mothership.group.position);
       if (this.shakeAmp > 0.001) {
         sceneGroup.position.set(
           (Math.random() - 0.5) * this.shakeAmp,
@@ -2545,173 +4283,210 @@
         sceneGroup.position.set(0, 0, 0);
       }
     }
-
-    /** Hover highlight + cursor. Runs once per frame while the pointer moves. */
-    hover() {
-      if (!this.city || this.switching) return;
-      const hit = getHitBuilding(true);
-      if (hit && hit !== this.hovered) {
-        if (this.hovered) this.restoreHoverColor(this.hovered);
-        this.hovered = hit;
-        if (hit.kind !== 'landmark' && hit.alive) {
-          this.city.buildings.mesh.setColorAt(hit.index, HOVER_COLOR);
-          this.city.buildings.mesh.instanceColor.needsUpdate = true;
-        }
-      } else if (!hit && this.hovered) {
-        this.restoreHoverColor(this.hovered);
-        this.hovered = null;
-      }
-      renderer.domElement.style.cursor = hit ? 'crosshair' : 'grab';
-    }
-
-    restoreHoverColor(b) {
-      if (b.kind === 'landmark' || !this.city) return;
-      const orig = this.city.buildings.origColors;
-      if (orig) {
-        const c = this.city.buildings.mesh.instanceColor;
-        c.setXYZ(b.index, orig[b.index * 3], orig[b.index * 3 + 1], orig[b.index * 3 + 2]);
-        c.needsUpdate = true;
-      }
-    }
   }
 
   // ============================================================================
-  //  GLOBAL WIRING — params, GUI, input, raycaster
+  //  BOOT — demo mode or the game
   // ============================================================================
 
-  const HOVER_COLOR = new THREE.Color(0xffaa66);
+  async function bootDemo() {
+    const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+    const GUI = (await import('https://cdn.jsdelivr.net/npm/lil-gui@0.20.0/dist/lil-gui.esm.min.js')).default;
 
-  const params = {
-    city: 'New York',
-    intensity: 5,
-    fogDensity: CONFIG.fogDensity,
-    laserColor: '#ff3b6e',
-    particles: true,
-    reset: () => game.resetCity(),
-    armageddon: () => game.armageddon(),
-  };
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 22, 0);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 30;
+    controls.maxDistance = 420;
+    controls.maxPolarAngle = 1.62;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.55;
+    controls.addEventListener('start', () => { controls.autoRotate = false; });
 
-  // custom materials that implement FogExp2 manually
-  const fogMaterials = new Set();
-  function registerFogMaterial(mat) {
-    fogMaterials.add(mat);
-    mat.uniforms.uFogColor.value.copy(scene.fog.color);
-    mat.uniforms.uFogDensity.value = scene.fog.density;
-  }
+    const demo = new LegacyDemo();
+    const params = {
+      city: 'New York',
+      intensity: demo.intensity,
+      fogDensity: CONFIG.fogDensity,
+      laserColor: '#ff3b6e',
+      particles: true,
+      reset: () => demo.resetCity(),
+      armageddon: () => demo.armageddon(),
+    };
+    const gui = new GUI({ title: 'INVASION COMMAND' });
+    gui.add(params, 'city', Object.keys(CITY_PROFILES)).name('City').onChange(v => demo.switchCity(v));
+    gui.add(params, 'intensity', 0, 10, 0.1).name('Invasion Intensity').onChange(v => { demo.intensity = v; demo.scheduleAutoAttack(); });
+    gui.add(params, 'fogDensity', 0.002, 0.012, 0.0001).name('Fog Density').onChange(setFogDensity);
+    gui.add(params, 'laserColor', ['#ff3b6e', '#00e5ff', '#ff8800', '#a44dff']).name('Laser Color').onChange(c => demo.beams.setColor(c));
+    gui.add(params, 'particles').name('Particles').onChange(v => {
+      demo.firePool.setVisible(v);
+      demo.smokePool.setVisible(v);
+    });
+    const resetCtrl = gui.add(params, 'reset').name('Reset City');
+    const doomCtrl = gui.add(params, 'armageddon').name('ARMAGEDDON');
+    resetCtrl.domElement.classList.add('danger');
+    doomCtrl.domElement.classList.add('danger');
 
-  function setFogDensity(d) {
-    scene.fog.density = d;
-    for (const m of fogMaterials) {
-      if (m.uniforms.uFogDensity) m.uniforms.uFogDensity.value = d;
-    }
-  }
-
-  const game = new Game();
-  game.start();
-
-  const raycaster = new THREE.Raycaster();
-  const pointer = new THREE.Vector2();
-  let pointerDirty = false;
-
-  function setPointerFromEvent(e) {
-    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
-    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
-  }
-
-  /** Raycast the current city; `forHover` skips dead buildings. */
-  function getHitBuilding(forHover = false) {
-    if (!game.city) return null;
-    raycaster.setFromCamera(pointer, camera);
-    const city = game.city;
-
-    const hits = raycaster.intersectObject(city.buildings.mesh, false);
-    if (hits.length > 0) {
-      const b = city.buildings.list[hits[0].instanceId];
-      if (b && b.alive) return b;
+    // legacy click-to-target
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const getHitBuilding = () => {
+      if (!demo.city) return null;
+      raycaster.setFromCamera(pointer, camera);
+      const city = demo.city;
+      const hits = raycaster.intersectObject(city.buildings.mesh, false);
+      if (hits.length > 0) {
+        const b = city.buildings.list[hits[0].instanceId];
+        if (b && b.alive) return b;
+        return null;
+      }
+      const lm = city.landmark;
+      if (lm && lm.alive && lm.group.visible) {
+        const lhits = raycaster.intersectObject(lm.group, true);
+        if (lhits.length > 0) return lm;
+      }
       return null;
+    };
+    renderer.domElement.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+      const hit = getHitBuilding();
+      if (hit) demo.fireAt(hit);
+    });
+    renderer.domElement.addEventListener('pointermove', e => {
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      const pr = renderer.getPixelRatio();
+      const h = window.innerHeight;
+      starMat.uniforms.uPixelRatio.value = pr;
+      starMat.uniforms.uHeight.value = h;
+      demo.firePool.points.material.uniforms.uPixelRatio.value = pr;
+      demo.firePool.points.material.uniforms.uHeight.value = h;
+      demo.smokePool.points.material.uniforms.uPixelRatio.value = pr;
+      demo.smokePool.points.material.uniforms.uHeight.value = h;
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      if (demo.city) demo.city.buildings.mesh.material.uniforms.uTime.value = demo.time;
+      demo.update(dt);
+      controls.update();
+      renderer.render(scene, camera);
     }
-    const lm = city.landmark;
-    if (lm && lm.alive && lm.group.visible) {
-      const lhits = raycaster.intersectObject(lm.group, true);
-      if (lhits.length > 0) return lm;
-    }
-    return null;
+    animate();
+
+    window.app = { demo, params, scene, camera, renderer, controls };
+    console.log('%c👽 ALIEN INVASION — CITY DESTROYER (legacy demo mode)', 'color:#9adfff;font-size:14px;font-weight:bold;');
+    console.log('Click a building to target it. Orbit: drag. Zoom: scroll.');
   }
 
-  renderer.domElement.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
-    setPointerFromEvent(e);
-    const hit = getHitBuilding();
-    if (hit) game.fireAt(hit);
-  });
+  let game = null;
 
-  renderer.domElement.addEventListener('pointermove', e => {
-    setPointerFromEvent(e);
-    pointerDirty = true;
-  });
+  if (DEMO) {
+    document.querySelectorAll('.overlay').forEach(el => { el.style.display = 'none'; });
+    bootDemo();
+  } else {
+    game = new Game();
+    game.init();
 
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    const pr = renderer.getPixelRatio();
-    const h = window.innerHeight;
-    starMat.uniforms.uPixelRatio.value = pr;
-    starMat.uniforms.uHeight.value = h;
-    game.firePool.points.material.uniforms.uPixelRatio.value = pr;
-    game.firePool.points.material.uniforms.uHeight.value = h;
-    game.smokePool.points.material.uniforms.uPixelRatio.value = pr;
-    game.smokePool.points.material.uniforms.uHeight.value = h;
-  });
+    // ---------------- input ----------------
+    window.addEventListener('pointermove', e => { if (game.world) game.world.aim.onMove(e); });
+    window.addEventListener('pointerdown', e => {
+      if (!game.world) return;
+      game.world.audio.unlock();
+      if (e.button !== 0) return;
+      game.world.combat.firing = true;
+    });
+    window.addEventListener('pointerup', e => {
+      if (e.button === 0 && game.world) game.world.combat.firing = false;
+    });
+    window.addEventListener('keydown', () => { if (game.world) game.world.audio.unlock(); });
 
-  // ---------------- lil-gui control panel ----------------
+    // ---------------- menu wiring ----------------
+    const cityButtons = document.querySelectorAll('.cityBtn');
+    cityButtons.forEach(btn => btn.addEventListener('click', () => {
+      cityButtons.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      game.cityChoice = btn.dataset.city;
+    }));
+    document.getElementById('startBtn').addEventListener('click', () => {
+      game.world.audio.unlock();
+      game.world.audio.play('wave');
+      game.startRun(game.cityChoice);
+    });
+    document.getElementById('againBtn').addEventListener('click', () => {
+      game.world.gameMachine.setState(GameState.MENU);
+    });
+    document.getElementById('replayBtn').addEventListener('click', () => {
+      game.startRun(game.cityName || game.cityChoice);
+    });
 
-  const gui = new GUI({ title: 'INVASION COMMAND' });
-  gui.add(params, 'city', Object.keys(CITY_PROFILES)).name('City').onChange(v => game.switchCity(v));
-  gui.add(params, 'intensity', 0, 10, 0.1).name('Invasion Intensity').onChange(() => game.scheduleAutoAttack());
-  gui.add(params, 'fogDensity', 0.002, 0.012, 0.0001).name('Fog Density').onChange(setFogDensity);
-  gui.add(params, 'laserColor', ['#ff3b6e', '#00e5ff', '#ff8800', '#a44dff']).name('Laser Color').onChange(c => game.beams.setColor(c));
-  gui.add(params, 'particles').name('Particles').onChange(v => {
-    game.firePool.setVisible(v);
-    game.smokePool.setVisible(v);
-  });
-  const resetCtrl = gui.add(params, 'reset').name('Reset City');
-  const doomCtrl = gui.add(params, 'armageddon').name('ARMAGEDDON');
-  resetCtrl.domElement.classList.add('danger');
-  doomCtrl.domElement.classList.add('danger');
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      const pr = renderer.getPixelRatio();
+      const h = window.innerHeight;
+      starMat.uniforms.uPixelRatio.value = pr;
+      starMat.uniforms.uHeight.value = h;
+      if (game.world) {
+        game.world.firePool.points.material.uniforms.uPixelRatio.value = pr;
+        game.world.firePool.points.material.uniforms.uHeight.value = h;
+        game.world.smokePool.points.material.uniforms.uPixelRatio.value = pr;
+        game.world.smokePool.points.material.uniforms.uHeight.value = h;
+      }
+    });
 
-  // ============================================================================
-  //  MAIN LOOP
-  // ============================================================================
-
-  const clock = new THREE.Clock();
-
-  function animate() {
-    requestAnimationFrame(animate);
-    const dt = Math.min(clock.getDelta(), 0.05);
-    const t = game.time;
-
-    // keep shared shader clocks alive
-    if (game.city) {
-      game.city.buildings.mesh.material.uniforms.uTime.value = t;
+    // ---------------- main loop ----------------
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      game.update(dt);
+      renderer.render(scene, camera);
     }
+    animate();
 
-    if (pointerDirty) {
-      pointerDirty = false;
-      game.hover();
-    }
+    window.app = {
+      game,
+      scene, camera, renderer,
+      GameState, THREE,
+      cheat: {
+        spawn: (type, count = 1) => {
+          for (let i = 0; i < count; i++) game.world.waveDirector.spawnOne(type, 1);
+        },
+        boss: () => game.world.waveDirector.spawnExtra('BOSS', 1),
+        killBoss: () => { if (game.world.boss) game.world.boss.damage(999999); },
+        damageBuilding: (id, amount) => game.world.integrity.damageBuilding(id, amount),
+        damageAll: () => {
+          for (const id of Array.from(game.world.integrity.entries.keys())) {
+            game.world.integrity.damageBuilding(id, 99999);
+          }
+        },
+        score: (n) => game.world.score.add(n),
+        win: () => game.world.gameMachine.setState(GameState.VICTORY),
+        lose: () => game.gameOver(),
+        state: () => game.world.gameMachine.state,
+        fire: (on) => { game.world.combat.firing = on; },
+      },
+    };
 
-    game.update(dt);
-    controls.update();
-    renderer.render(scene, camera);
+    console.log(
+      '%c🛡️ CITY DEFENDER 3D — defend the city, hold LMB to fire',
+      'color:#9adfff;font-size:14px;font-weight:bold;'
+    );
+    console.log('Mouse: aim · Hold LMB: fire · ?demo=1 for the legacy demo.');
   }
-  animate();
-
-  // expose a tiny debug handle (handy for the console / tests)
-  window.app = { game, params, scene, camera, renderer };
-
-  console.log('%c👽 ALIEN INVASION — CITY DESTROYER', 'color:#9adfff;font-size:14px;font-weight:bold;');
-  console.log('Click a building to target it. Orbit: drag. Zoom: scroll.');
   </script>
 </body>
 </html>
