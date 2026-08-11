@@ -52,6 +52,15 @@
     white-space: nowrap;
   }
 
+  #victory {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20; pointer-events: none; user-select: none;
+    font-size: 42px; font-weight: 900; letter-spacing: 12px; white-space: nowrap;
+    color: #ff5d7a; opacity: 0;
+    text-shadow: 0 0 22px rgba(255, 59, 110, .95), 0 0 70px rgba(255, 59, 110, .45);
+  }
+
   /* ==================== SCREEN FX OVERLAYS ==================== */
   #vignette {
     position: fixed; inset: 0; z-index: 5; pointer-events: none;
@@ -99,6 +108,7 @@
     <div id="integrity">STRUCTURAL INTEGRITY: <span id="integrityVal">100%</span></div>
   </div>
   <div id="hint">DRAG — ORBIT &nbsp;·&nbsp; SCROLL — ZOOM &nbsp;·&nbsp; CLICK A BUILDING — FIRE</div>
+  <div id="victory">THE ALIENS WON</div>
   <div id="vignette"></div>
   <div id="scanlines"></div>
 
@@ -455,24 +465,110 @@
   groundGlow.scale.setScalar(420);
   sceneGroup.add(groundGlow);
 
-  // sweeping ground searchlights
-  const SEARCHLIGHTS = [
-    { pos: [175, 0, -150], color: 0x7766ff, speed: 0.22 },
-    { pos: [-190, 0, -160], color: 0x00e5ff, speed: -0.16 },
-    { pos: [20, 0, 210], color: 0xff44aa, speed: 0.12 },
+  // ---------------------------------------------------------------------------
+  //  LA-INCIDENT SEARCHLIGHTS — anti-aircraft light batteries whose restless
+  //  beams converge on the mothership (Battle of Los Angeles, 1943).
+  // ---------------------------------------------------------------------------
+
+  const UP_VECTOR = new THREE.Vector3(0, 1, 0);
+  const BEAM_GEO = new THREE.ConeGeometry(70, 260, 24, 1, true);
+
+  const SEARCHLIGHT_UNITS = [
+    { pos: [160, 0, -140], color: 0x7766ff },
+    { pos: [-170, 0, -150], color: 0x00e5ff },
+    { pos: [20, 0, 200], color: 0xff44aa },
+    { pos: [-150, 0, 130], color: 0x4dffb8 },
+    { pos: [140, 0, 120], color: 0xff8844 },
+    { pos: [0, 0, -205], color: 0x66aaff },
+    { pos: [-35, 0, 235], color: 0xff6a9a },
   ];
-  for (const sl of SEARCHLIGHTS) {
-    const cone = new THREE.Mesh(
-      new THREE.ConeGeometry(90, 340, 24, 1, true),
+  const searchlights = [];
+  for (const sl of SEARCHLIGHT_UNITS) {
+    const unit = new THREE.Group();
+    unit.position.set(...sl.pos);
+    sceneGroup.add(unit);
+
+    // concrete base drum + operator ring
+    const housing = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.15, 1.4, 1.7, 12),
+      new THREE.MeshStandardMaterial({ color: 0x1c2138, metalness: 0.8, roughness: 0.35 })
+    );
+    housing.position.y = 0.85;
+    unit.add(housing);
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(1.15, 0.12, 8, 20),
+      new THREE.MeshStandardMaterial({ color: 0x33394f, metalness: 0.6, roughness: 0.5 })
+    );
+    rim.rotation.x = Math.PI / 2;
+    rim.position.y = 1.7;
+    unit.add(rim);
+
+    // blazing lens
+    const lens = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 12, 8),
       new THREE.MeshBasicMaterial({
-        color: sl.color, transparent: true, opacity: 0.05,
-        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+        color: sl.color, transparent: true,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
       })
     );
-    cone.position.set(...sl.pos);
-    cone.rotation.x = Math.PI / 2 - 0.62; // tilted toward the sky
-    cone.userData.speed = sl.speed;
-    sceneGroup.add(cone);
+    lens.position.y = 1.95;
+    unit.add(lens);
+
+    // beam shaft: wide frosted cone + narrow bright white core cone
+    const beam = new THREE.Mesh(BEAM_GEO, new THREE.MeshBasicMaterial({
+      color: sl.color, transparent: true, opacity: 0.13,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+    }));
+    unit.add(beam);
+    const core = new THREE.Mesh(BEAM_GEO, new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.26,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+    }));
+    unit.add(core);
+
+    // lit ground pool around the housing
+    const pool = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeGlowTexture([[0, 'rgba(255,255,255,0.30)'],[0.5, 'rgba(255,255,255,0.08)'],[1, 'rgba(255,255,255,0)']], 128),
+      color: sl.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    pool.position.y = 0.35;
+    pool.scale.setScalar(11);
+    unit.add(pool);
+
+    unit.userData.beam = beam;
+    unit.userData.core = core;
+    unit.userData.lens = lens;
+    unit.userData.quat = new THREE.Quaternion();
+    unit.userData.phase = Math.random() * Math.PI * 2;
+    searchlights.push(unit);
+  }
+
+  /** Aim a battery at a wandering point near the mothership so all beams
+   *  converge on the UFO while still sweeping restlessly. */
+  function updateSearchlight(unit, dt, t, target) {
+    const wig = {
+      x: Math.sin(t * 0.6 + unit.userData.phase) * 26,
+      y: Math.sin(t * 0.9 + unit.userData.phase * 2) * 15,
+      z: Math.cos(t * 0.5 + unit.userData.phase) * 26,
+    };
+    const dir = new THREE.Vector3(
+      target.x + wig.x - unit.position.x,
+      target.y + wig.y - unit.position.y,
+      target.z + wig.z - unit.position.z
+    );
+    const len = dir.length();
+    const want = new THREE.Quaternion().setFromUnitVectors(UP_VECTOR, dir.normalize());
+    unit.userData.quat.slerp(want, Math.min(1, dt * 2.0));
+    unit.quaternion.copy(unit.userData.quat);
+
+    const s = len / 260;
+    unit.userData.beam.scale.setScalar(s);
+    unit.userData.core.scale.setScalar(s);
+
+    const shimmer = 0.8 + 0.2 * Math.sin(t * 4.0 + unit.userData.phase * 6.0);
+    unit.userData.beam.material.opacity = 0.13 * shimmer;
+    unit.userData.core.material.opacity = 0.26 * shimmer;
+    unit.userData.lens.material.opacity = 0.85 + 0.15 * shimmer;
   }
 
   // ============================================================================
@@ -1154,6 +1250,116 @@
   }
 
   // ============================================================================
+  //  SCOUT UFOs — small saucers patrolling the city sky under the mothership
+  // ============================================================================
+
+  class ScoutShip {
+    constructor(sceneGroup, cfg) {
+      const g = new THREE.Group();
+      g.position.set(Math.cos(cfg.phase) * cfg.radius, cfg.height, Math.sin(cfg.phase) * cfg.radius);
+      sceneGroup.add(g);
+      this.group = g;
+      this.cfg = cfg;
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x20243e, metalness: 0.85, roughness: 0.3,
+        emissive: new THREE.Color(cfg.color), emissiveIntensity: 0.55,
+      });
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.6, 1.0, 24), bodyMat);
+      g.add(disc);
+      this.disc = disc;
+
+      const dome = new THREE.Mesh(
+        new THREE.SphereGeometry(1.3, 16, 10),
+        new THREE.MeshStandardMaterial({
+          color: 0x26303c, metalness: 0.5, roughness: 0.2,
+          emissive: 0xa8dcff, emissiveIntensity: 0.9,
+        })
+      );
+      dome.position.y = 0.85;
+      g.add(dome);
+
+      const belly = new THREE.Mesh(
+        new THREE.CircleGeometry(3.0, 20),
+        new THREE.MeshBasicMaterial({
+          color: cfg.color, transparent: true, opacity: 0.55,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+        })
+      );
+      belly.position.y = -0.5;
+      g.add(belly);
+
+      const rimMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(cfg.color).multiplyScalar(1.6),
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const rim = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), rimMat);
+        rim.position.set(Math.cos(a) * 3.6, -0.25, Math.sin(a) * 3.6);
+        g.add(rim);
+      }
+
+      // faint search beam pointing down at the city
+      this.beam = new THREE.Mesh(
+        new THREE.ConeGeometry(10, 64, 20, 1, true),
+        new THREE.MeshBasicMaterial({
+          color: cfg.color, transparent: true, opacity: 0.07,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+        })
+      );
+      this.beam.rotation.x = Math.PI; // apex points down
+      g.add(this.beam);
+
+      // soft pool of light where the beam kisses the ground
+      this.pool = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: makeGlowTexture([[0, 'rgba(255,255,255,0.20)'],[0.5, 'rgba(255,255,255,0.06)'],[1, 'rgba(255,255,255,0)']], 128),
+        color: cfg.color, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      }));
+      this.pool.position.y = 1.2;
+      sceneGroup.add(this.pool);
+
+      this.light = new THREE.PointLight(cfg.color, 1500, 170, 1.8);
+      g.add(this.light);
+    }
+
+    update(dt, t) {
+      const c = this.cfg;
+      c.phase += dt * c.speed;
+      const p = this.group.position;
+      p.x = Math.cos(c.phase) * c.radius;
+      p.z = Math.sin(c.phase) * c.radius;
+      p.y = c.height + Math.sin(t * 1.3 + c.phase * 2.0) * 2.4;
+      this.group.rotation.y += dt * 0.6;
+
+      // beam length follows the ship's altitude (apex ends at the ground)
+      const s = (p.y - 0.5) / 64;
+      this.beam.position.y = (p.y - 0.5) / 2;
+      this.beam.scale.setScalar(s);
+      this.beam.material.opacity = 0.07 * (0.75 + 0.25 * Math.sin(t * 6.0 + c.phase * 4.0));
+      this.light.intensity = 1500 * (0.7 + 0.3 * Math.sin(t * 4.0 + c.phase));
+
+      // ground pool follows the beam tip
+      this.pool.position.set(p.x, 1.2, p.z);
+      this.pool.scale.setScalar(10 + p.y * 0.3);
+    }
+  }
+
+  class ScoutFleet {
+    constructor(sceneGroup) {
+      this.ships = [
+        new ScoutShip(sceneGroup, { radius: 58, height: 92, speed: 0.17, phase: 0.6, color: 0x00e5ff }),
+        new ScoutShip(sceneGroup, { radius: 44, height: 80, speed: -0.22, phase: 2.5, color: 0xff44aa }),
+        new ScoutShip(sceneGroup, { radius: 74, height: 101, speed: 0.12, phase: 4.2, color: 0x9a4dff }),
+      ];
+    }
+
+    update(dt, t) {
+      for (const s of this.ships) s.update(dt, t);
+    }
+  }
+
+  // ============================================================================
   //  LASER BEAM POOL
   //  A cylinder with an additive glow shader. Beams are pooled and recycled
   //  to keep the draw call / allocation count flat.
@@ -1579,6 +1785,152 @@
   const DOT_TEXTURE = makeSoftDotTexture();
 
   // ============================================================================
+  //  CITY TRAFFIC — little cars with glowing headlights cruising the avenues
+  // ============================================================================
+
+  const CAR_BODY_PALETTE = [0xd33c3c, 0x3c7ad3, 0xd3b53c, 0xdfe2ea, 0x3cd3a1, 0xa05cd3];
+  const CAR_GLASS_MAT = new THREE.MeshStandardMaterial({
+    color: 0x0e2030, metalness: 0.2, roughness: 0.15,
+    emissive: 0x2c4a66, emissiveIntensity: 0.7,
+  });
+  const CAR_HEADLIGHT_MAT = new THREE.MeshBasicMaterial({
+    color: 0xcfeeff, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  });
+  const CAR_TAIL_MAT = new THREE.MeshBasicMaterial({
+    color: 0xff2a3c, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  });
+  const CAR_WHEEL_MAT = new THREE.MeshStandardMaterial({ color: 0x0a0a10, roughness: 1 });
+
+  class CarRig {
+    constructor(sceneGroup) {
+      this.sceneGroup = sceneGroup;
+      this.cars = [];
+      for (let i = 0; i < 12; i++) {
+        this.cars.push(this.makeCar(CAR_BODY_PALETTE[i % CAR_BODY_PALETTE.length]));
+      }
+    }
+
+    makeCar(color) {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.9, 0.42, 0.8),
+        new THREE.MeshStandardMaterial({
+          color, metalness: 0.55, roughness: 0.45,
+          emissive: new THREE.Color(color).multiplyScalar(0.16),
+        })
+      );
+      body.position.y = 0.42;
+      g.add(body);
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.34, 0.7), CAR_GLASS_MAT);
+      cabin.position.set(-0.12, 0.78, 0);
+      g.add(cabin);
+      const wheelGeo = new THREE.BoxGeometry(0.3, 0.3, 0.16);
+      for (const [wx, wz] of [[-0.55, 0.44], [-0.55, -0.44], [0.55, 0.44], [0.55, -0.44]]) {
+        const w = new THREE.Mesh(wheelGeo, CAR_WHEEL_MAT);
+        w.position.set(wx, 0.18, wz);
+        g.add(w);
+      }
+      // headlights at the front (+X), taillights at the back
+      const lampGeo = new THREE.SphereGeometry(0.09, 8, 8);
+      for (const wz of [-0.3, 0.3]) {
+        const hl = new THREE.Mesh(lampGeo, CAR_HEADLIGHT_MAT);
+        hl.position.set(0.97, 0.46, wz);
+        g.add(hl);
+        const tl = new THREE.Mesh(lampGeo, CAR_TAIL_MAT);
+        tl.position.set(-0.97, 0.46, wz);
+        g.add(tl);
+      }
+      this.sceneGroup.add(g);
+      return g;
+    }
+
+    /** Find the cleanest street avenues through the current city, then park
+     *  the fleet on them plus a perimeter ring road. */
+    place(city) {
+      const bld = city.buildings.list;
+      const span = city.profile.radius * 0.82;
+      const spacing = city.profile.spacing;
+
+      const scored = (axis) => {
+        const lanes = [];
+        const last = Math.ceil(span / spacing);
+        for (let i = -last; i <= last; i++) {
+          const lane = (i + 0.5) * spacing;
+          // keep the avenues clear of the landmark block
+          if (Math.abs(lane) < city.profile.landmarkRadius + 2) continue;
+          let pen = 0;
+          for (const b of bld) {
+            const alongMin = axis === 'x' ? b.z - b.d / 2 : b.x - b.w / 2;
+            const alongMax = axis === 'x' ? b.z + b.d / 2 : b.x + b.w / 2;
+            if (alongMax < -span || alongMin > span) continue;
+            const latMin = axis === 'x' ? b.x - b.w / 2 : b.z - b.d / 2;
+            const latMax = axis === 'x' ? b.x + b.w / 2 : b.z + b.d / 2;
+            pen = Math.max(pen, Math.min(latMax, lane + 1.3) - Math.max(latMin, lane - 1.3));
+          }
+          lanes.push({ lane, pen });
+        }
+        lanes.sort((a, b) => a.pen - b.pen);
+        return lanes;
+      };
+
+      const xLanes = scored('x').filter(l => l.pen <= 0).slice(0, 3);
+      const zLanes = scored('z').filter(l => l.pen <= 0).slice(0, 3);
+
+      let idx = 0;
+      const parkOnLane = (laneVal, axis, dir) => {
+        const car = this.cars[idx++];
+        if (!car) return;
+        car.userData = {
+          mode: 'lane',
+          axis, lane: laneVal,
+          dir, speed: 3.4 + Math.random() * 3.4,
+          pos: (Math.random() - 0.5) * span * 1.6,
+          span,
+        };
+      };
+      xLanes.forEach((L, i) => parkOnLane(L.lane, 'x', i % 2 === 0 ? 1 : -1));
+      zLanes.forEach((L, i) => parkOnLane(L.lane, 'z', i % 2 === 0 ? 1 : -1));
+
+      // leftover cars loop around the city on a ring road
+      const ringR = city.profile.radius + 7;
+      const ringCount = Math.max(1, this.cars.length - idx);
+      for (let i = idx; i < this.cars.length; i++) {
+        const car = this.cars[i];
+        car.userData = {
+          mode: 'ring',
+          radius: ringR,
+          theta: ((i - idx) / ringCount) * Math.PI * 2 + 0.5,
+          speed: 4.2 + (i % 3) * 1.2,
+        };
+      }
+    }
+
+    update(dt) {
+      for (const car of this.cars) {
+        const ud = car.userData;
+        if (!ud) continue;
+        if (ud.mode === 'lane') {
+          ud.pos += ud.dir * ud.speed * dt;
+          if (ud.pos > ud.span) { ud.pos = ud.span; ud.dir = -1; }
+          if (ud.pos < -ud.span) { ud.pos = -ud.span; ud.dir = 1; }
+          if (ud.axis === 'x') car.position.set(ud.pos, 0, ud.lane);
+          else car.position.set(ud.lane, 0, ud.pos);
+          car.rotation.y = ud.axis === 'x'
+            ? (ud.dir > 0 ? 0 : Math.PI)
+            : (ud.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+        } else {
+          ud.theta += (ud.speed * dt) / ud.radius;
+          const r = ud.radius;
+          car.position.set(Math.cos(ud.theta) * r, 0, Math.sin(ud.theta) * r);
+          car.rotation.y = ud.theta + Math.PI / 2;
+        }
+      }
+    }
+  }
+
+  // ============================================================================
   //  TARGETING DOT POOL
   // ============================================================================
 
@@ -1638,6 +1990,9 @@
       this.dots = null;
       this.firePool = null;
       this.smokePool = null;
+      this.scouts = null;
+      this.cars = null;
+      this.aliensWon = false;
       this.timers = new Set();     // tracked gsap delayedCalls
       this.autoTimer = null;
       this.shakeAmp = 0;
@@ -1659,6 +2014,8 @@
         max: CONFIG.smokeMax, blending: THREE.NormalBlending,
         gravity: 3.5, drag: 0.975, growth: 2.0,
       });
+      this.scouts = new ScoutFleet(sceneGroup);
+      this.cars = new CarRig(sceneGroup);
       this.switchCity(params.city, true);
     }
 
@@ -1713,6 +2070,12 @@
       // arrival shockwave
       this.fx.spawn(new THREE.Vector3(0, 0, 0), 0x00e5ff, 1.6);
       this.updateIntegrity();
+      this.cars.place(this.city);
+      // fresh round — the aliens can lose again
+      if (this.aliensWon) {
+        this.aliensWon = false;
+        gsap.to('#victory', { opacity: 0, duration: 0.35 });
+      }
       // spawn a few ambient particles drifting up from the city
       this.spawnAmbientSmoke();
     }
@@ -1858,6 +2221,11 @@
       if (this.hovered === building) this.hovered = null;
       if (this.city) this.city.aliveCount = Math.max(0, this.city.aliveCount - 1);
 
+      // every building AND the landmark lies in ruins -> the aliens won
+      if (this.city && this.city.aliveCount === 0 && !this.city.landmark.alive) {
+        this.alienVictory();
+      }
+
       if (building.kind === 'landmark') {
         this.collapseLandmark(building);
         return;
@@ -1958,6 +2326,16 @@
       gsap.fromTo(el, { scale: 1.35 }, { scale: 1, duration: 0.35, ease: 'power2.out' });
     }
 
+    alienVictory() {
+      if (this.aliensWon) return;
+      this.aliensWon = true;
+      console.log('%c👽 The Aliens won.', 'color:#ff5d7a;font-size:18px;font-weight:bold;text-shadow:0 0 10px #ff3b6e;');
+      const el = document.getElementById('victory');
+      gsap.killTweensOf(el);
+      gsap.fromTo(el, { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'power2.out' });
+      this.shakeAmp = Math.max(this.shakeAmp, 0.5);
+    }
+
     // ---------------- auto invasion / armageddon ----------------
 
     scheduleAutoAttack() {
@@ -2000,6 +2378,8 @@
       if (!this.city || this.switching) return;
       this.cancelAll();
       const city = this.city;
+      this.aliensWon = false;
+      gsap.to('#victory', { opacity: 0, duration: 0.35 });
 
       // restore instanced buildings + antennas + beacons
       const quat = new THREE.Quaternion();
@@ -2136,6 +2516,8 @@
       }
 
       this.mothership.update(dt, t);
+      this.scouts.update(dt, t);
+      this.cars.update(dt);
       this.beams.update(t);
       this.fx.update(dt);
       this.firePool.update(dt);
@@ -2146,11 +2528,9 @@
         this.city.beacons.material.opacity = 0.6 + 0.4 * Math.sin(t * 2.4);
       }
 
-      // searchlight sweep
-      for (const cone of sceneGroup.children) {
-        if (cone.isMesh && cone.geometry.type === 'ConeGeometry' && cone.userData.speed !== undefined) {
-          cone.rotation.y += dt * cone.userData.speed;
-        }
+      // anti-aircraft searchlights converge on the mothership
+      for (const sl of searchlights) {
+        updateSearchlight(sl, dt, t, this.mothership.group.position);
       }
 
       // camera shake
