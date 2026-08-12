@@ -8,8 +8,10 @@ The point is to gamble with LLMs and see what comes out. Prototypes are welcome;
 
 | Path | Description |
 | --- | --- |
-| `ds-v4-flash/` | First project: "City Defender 3D" — a Three.js arcade game |
-| `prompt.md` | Root prompt(s) used to bootstrap the first project |
+| `space-invaders/ds-v4-flash/` | First project: "City Defender 3D" — a Three.js arcade game (single-file, ~4500 lines) |
+| `space-invaders/gemini-3.5-flash/` | "Alien Invasion: City Destroyer" — Three.js r128 demo, same prompt, earlier model |
+| `space-invaders/gemini-3.6-flash/` | Alien Invasion 3D — procedural cities + particle physics demo, newer model take |
+| `space-invaders/prompt.md` | Root prompt(s) used to bootstrap the first project |
 | `_ai/` | AI knowledge base — lessons learned, backlog, technical decisions |
 
 Planned attractions (complete list as ideas — nothing more):
@@ -32,7 +34,7 @@ The root `_ai/` holds the same kind of knowledge base at monorepo level, so patt
 Every project is self-contained (no build step required to just view it). Serve the folder over HTTP and open the page:
 
 ```sh
-# from the project folder, e.g. ds-v4-flash/
+# from the project folder, e.g. space-invaders/ds-v4-flash/
 python3 -m http.server 8080
 # then open http://localhost:8080 in a browser
 ```
