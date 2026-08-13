@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unrolled Slit-Scan Image Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #080808;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #fff;
+        }
+        #canvas-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #output-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        /* PIP Preview Window (Bottom Left) */
+        #preview-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 240px;
+            height: 175px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        #preview-header {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 5px 8px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            color: #aaa;
+        }
+        #preview-canvas {
+            width: 100%;
+            height: calc(100% - 22px);
+            object-fit: contain;
+        }
+        #file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <!-- Main Unrolled Slit-Scan Output Canvas -->
+        <canvas id="output-canvas"></canvas>
+
+        <!-- PIP Preview for Live Source & Active Slit -->
+        <div id="preview-container">
+            <div id="preview-header">Source Feed & Sample Slit</div>
+            <canvas id="preview-canvas"></canvas>
+        </div>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*,video/*">
+
+    <!-- CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+
+    <script>
+        // --- 1. Offscreen Input Canvas & Op-Art Shader Setup ---
+        const inputW = 800;
+        const inputH = 800;
+
+        const inputCanvas = document.createElement('canvas');
+        inputCanvas.width = inputW;
+        inputCanvas.height = inputH;
+        const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
+
+        const webglCanvas = document.createElement('canvas');
+        webglCanvas.width = inputW;
+        webglCanvas.height = inputH;
+
+        const renderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true });
+        renderer.setSize(inputW, inputH);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform int u_mode;
+            
+            float aaStep(float threshold, float value) {
+                float afwidth = length(vec2(dFdx(value), dFdy(value))) * 0.7071;
+                return smoothstep(threshold - afwidth, threshold + afwidth, value);
+            }
+
+            void main() {
+                vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.x, u_resolution.y);
+                float val = 0.0;
+                
+                if (u_mode == 0) { // Wavy Terrain
+                    float w = sin(uv.x * 10.0 + u_time * 2.0) * 0.2;
+                    val = aaStep(0.0, sin((uv.y + w) * 30.0));
+                } else if (u_mode == 1) { // Spiral Tunnel
+                    float r = length(uv);
+                    float a = atan(uv.y, uv.x);
+                    val = aaStep(0.0, sin(r * 35.0 - u_time * 4.0 + a * 4.0));
+                } else if (u_mode == 2) { // Optical Checkerboard
+                    vec2 p = uv * 10.0 + sin(uv.yx * 3.0 + u_time * 2.0) * 0.8;
+                    vec2 check = floor(p);
+                    val = mod(check.x + check.y, 2.0);
+                } else if (u_mode == 3) { // Vertical Ripples
+                    float rip = sin(uv.y * 12.0 - u_time * 3.0) * 0.15;
+                    val = aaStep(0.0, sin((uv.x + rip) * 35.0));
+                }
+                
+                gl_FragColor = vec4(vec3(val), 1.0);
+            }
+        `;
+
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2(inputW, inputH) },
+            u_time: { value: 0 },
+            u_mode: { value: 1 }
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: `void main() { gl_Position = vec4(position, 1.0); }`,
+            fragmentShader,
+            uniforms
+        });
+
+        const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        scene.add(quad);
+
+        // Media Upload Handling
+        let userVideo = null;
+        let userImage = null;
+        let inputType = 'shader';
+
+        // --- 2. Main Output & PIP Preview Canvases ---
+        const outputCanvas = document.getElementById('output-canvas');
+        const outputCtx = outputCanvas.getContext('2d');
+
+        const previewCanvas = document.getElementById('preview-canvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        let outputImageData = null;
+        let scanX = 0; // Current destination column (Left -> Right)
+
+        function resizeOutput() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            outputCanvas.width = w;
+            outputCanvas.height = h;
+            previewCanvas.width = 240;
+            previewCanvas.height = 152;
+            
+            outputImageData = outputCtx.createImageData(w, h);
+            resetScan();
+        }
+        window.addEventListener('resize', resizeOutput);
+
+        function resetScan() {
+            scanX = 0;
+            if (outputImageData) {
+                // Fill black
+                const data = outputImageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    data[i] = 0;
+                    data[i+1] = 0;
+                    data[i+2] = 0;
+                    data[i+3] = 255;
+                }
+                outputCtx.putImageData(outputImageData, 0, 0);
+            }
+        }
+
+        // --- 3. Parametric Source Slit Curve Math ---
+        // Maps normalized parameter v in [0, 1] to a 2D source coordinate (x, y)
+        function getPointOnSlit(v, t, w, h) {
+            const cx = w / 2 + Math.sin(t * params.travelSpeed * 0.7) * (w * 0.3);
+            const cy = h / 2 + Math.cos(t * params.travelSpeed * 0.5) * (h * 0.3);
+            const angle = t * params.rotationSpeed;
+
+            if (params.slitShape === 'Line') {
+                const len = Math.max(w, h) * 1.2;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const x1 = cx - cosA * (len / 2);
+                const y1 = cy - sinA * (len / 2);
+                const x2 = cx + cosA * (len / 2);
+                const y2 = cy + sinA * (len / 2);
+                
+                return {
+                    x: x1 + (x2 - x1) * v,
+                    y: y1 + (y2 - y1) * v
+                };
+
+            } else if (params.slitShape === 'Circle / Ring') {
+                const baseR = Math.min(w, h) * 0.35;
+                const r = baseR * (0.5 + 0.5 * Math.sin(t * params.scaleSpeed));
+                const theta = v * Math.PI * 2 + angle;
+                return {
+                    x: cx + Math.cos(theta) * r,
+                    y: cy + Math.sin(theta) * r
+                };
+
+            } else if (params.slitShape === 'Polyline') {
+                const points = [
+                    { x: cx - 200, y: cy - 200 },
+                    { x: cx + 200, y: cy - 100 },
+                    { x: cx - 150, y: cy + 150 },
+                    { x: cx + 200, y: cy + 200 }
+                ];
+                // Rotate vertices
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+                const rotPoints = points.map(p => {
+                    const dx = p.x - cx;
+                    const dy = p.y - cy;
+                    return {
+                        x: cx + dx * cosA - dy * sinA,
+                        y: cy + dx * sinA + dy * cosA
+                    };
+                });
+
+                const segs = rotPoints.length - 1;
+                const scaledV = v * segs;
+                const idx = Math.min(Math.floor(scaledV), segs - 1);
+                const subV = scaledV - idx;
+
+                const pA = rotPoints[idx];
+                const pB = rotPoints[idx + 1];
+
+                return {
+                    x: pA.x + (pB.x - pA.x) * subV,
+                    y: pA.y + (pB.y - pA.y) * subV
+                };
+
+            } else if (params.slitShape === 'Spline (Bezier)') {
+                const r = Math.max(w, h) * 0.4;
+                const p0 = { x: cx - Math.cos(angle) * r, y: cy - Math.sin(angle) * r };
+                const p3 = { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+
+                const p1 = { x: cx + Math.sin(t * 2.0) * (w * 0.35), y: cy + Math.cos(t * 1.5) * (h * 0.35) };
+                const p2 = { x: cx - Math.sin(t * 1.8) * (w * 0.35), y: cy - Math.cos(t * 2.2) * (h * 0.35) };
+
+                // Cubic Bezier formula
+                const u = 1 - v;
+                const tt = v * v;
+                const uu = u * u;
+                const uuu = uu * u;
+                const ttt = tt * v;
+
+                return {
+                    x: uuu * p0.x + 3 * uu * v * p1.x + 3 * u * tt * p2.x + ttt * p3.x,
+                    y: uuu * p0.y + 3 * uu * v * p1.y + 3 * u * tt * p2.y + ttt * p3.y
+                };
+            }
+        }
+
+        // --- 4. GUI & Parameters ---
+        const params = {
+            source: 'Op-Art Shader',
+            shaderMode: 1,
+            uploadFile: () => document.getElementById('file-input').click(),
+            slitShape: 'Line',
+            scanSpeed: 2, // Columns per frame
+            rotationSpeed: 0.8,
+            travelSpeed: 0.6,
+            scaleSpeed: 1.0,
+            pause: false,
+            restartScan: () => resetScan(),
+            downloadPNG: () => exportImage()
+        };
+
+        const gui = new lil.GUI({ title: 'Unrolled Slit-Scan Controls' });
+
+        gui.add(params, 'source', ['Op-Art Shader', 'Uploaded File']).name('Input Source').onChange(val => {
+            if (val === 'Uploaded File') {
+                params.uploadFile();
+            } else {
+                inputType = 'shader';
+                resetScan();
+            }
+        });
+
+        gui.add(params, 'shaderMode', { 'Wavy Terrain': 0, 'Tunnel': 1, 'Checkerboard': 2, 'Ripples': 3 }).name('Shader Pattern').onChange(v => {
+            uniforms.u_mode.value = v;
+            resetScan();
+        });
+
+        gui.add(params, 'uploadFile').name('📁 Upload Custom File');
+
+        gui.add(params, 'slitShape', ['Line', 'Circle / Ring', 'Polyline', 'Spline (Bezier)']).name('Source Slit Shape').onChange(() => resetScan());
+
+        gui.add(params, 'scanSpeed', 1, 10, 1).name('Scan Speed (px/frame)');
+        gui.add(params, 'rotationSpeed', 0.0, 3.0, 0.05).name('Rotation Speed');
+        gui.add(params, 'travelSpeed', 0.0, 3.0, 0.05).name('Move Speed');
+        gui.add(params, 'scaleSpeed', 0.0, 3.0, 0.05).name('Pulse Speed');
+
+        gui.add(params, 'pause').name('Pause Scan');
+        gui.add(params, 'restartScan').name('🔄 Restart Scan');
+        gui.add(params, 'downloadPNG').name('💾 Export Image (PNG)');
+
+        // --- 5. File Upload Handler ---
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            if (file.type.startsWith('video/')) {
+                if (userVideo) userVideo.pause();
+                userVideo = document.createElement('video');
+                userVideo.src = url;
+                userVideo.loop = true;
+                userVideo.muted = true;
+                userVideo.play();
+                inputType = 'video';
+                params.source = 'Uploaded File';
+            } else if (file.type.startsWith('image/')) {
+                userImage = new Image();
+                userImage.onload = () => {
+                    inputType = 'image';
+                    params.source = 'Uploaded File';
+                };
+                userImage.src = url;
+            }
+            resetScan();
+        });
+
+        function exportImage() {
+            const link = document.createElement('a');
+            link.download = `unrolled_slitscan_${Date.now()}.png`;
+            link.href = outputCanvas.toDataURL();
+            link.click();
+        }
+
+        // --- 6. Main Animation Loop ---
+        const clock = new THREE.Clock();
+        resizeOutput();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            // 1. Render Source Frame to Input Canvas Buffer
+            if (inputType === 'shader') {
+                uniforms.u_time.value = elapsedTime;
+                renderer.render(scene, camera);
+                inputCtx.drawImage(webglCanvas, 0, 0);
+            } else if (inputType === 'video' && userVideo && userVideo.readyState >= 2) {
+                inputCtx.drawImage(userVideo, 0, 0, inputW, inputH);
+            } else if (inputType === 'image' && userImage) {
+                inputCtx.drawImage(userImage, 0, 0, inputW, inputH);
+            }
+
+            // Grab pixel array from input canvas
+            const inputImageData = inputCtx.getImageData(0, 0, inputW, inputH);
+            const inPixels = inputImageData.data;
+
+            const outW = outputCanvas.width;
+            const outH = outputCanvas.height;
+            const outPixels = outputImageData.data;
+
+            // 2. Perform Unrolling Slit-Scan (Destination Left -> Right)
+            if (!params.pause) {
+                for (let step = 0; step < params.scanSpeed; step++) {
+                    const colX = (scanX + step) % outW;
+
+                    for (let y = 0; y < outH; y++) {
+                        const v = y / (outH - 1); // Vertical coordinate parameter along the source slit
+                        
+                        // Sample point on source shape
+                        const pt = getPointOnSlit(v, elapsedTime, inputW, inputH);
+                        
+                        // Clamp to input dimensions
+                        const sx = Math.min(Math.max(Math.floor(pt.x), 0), inputW - 1);
+                        const sy = Math.min(Math.max(Math.floor(pt.y), 0), inputH - 1);
+
+                        // Read RGBA from source
+                        const srcIdx = (sy * inputW + sx) * 4;
+                        const r = inPixels[srcIdx];
+                        const g = inPixels[srcIdx + 1];
+                        const b = inPixels[srcIdx + 2];
+                        const a = inPixels[srcIdx + 3];
+
+                        // Write RGBA to output destination column
+                        const outIdx = (y * outW + colX) * 4;
+                        outPixels[outIdx] = r;
+                        outPixels[outIdx + 1] = g;
+                        outPixels[outIdx + 2] = b;
+                        outPixels[outIdx + 3] = a;
+                    }
+
+                    scanX = colX + 1;
+                }
+
+                // Push updated ImageData to main output canvas
+                outputCtx.putImageData(outputImageData, 0, 0);
+
+                // Draw moving scanline cursor on main screen
+                outputCtx.fillStyle = 'rgba(255, 0, 85, 0.8)';
+                outputCtx.fillRect(scanX % outW, 0, 2, outH);
+            }
+
+            // 3. Render PIP Source Preview with Active Slit Line Overlay
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+            previewCtx.drawImage(inputCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
+
+            previewCtx.strokeStyle = '#ff0055';
+            previewCtx.lineWidth = 2;
+            previewCtx.beginPath();
+
+            const pW = previewCanvas.width;
+            const pH = previewCanvas.height;
+            const samples = 60;
+
+            for (let i = 0; i <= samples; i++) {
+                const v = i / samples;
+                const pt = getPointOnSlit(v, elapsedTime, inputW, inputH);
+                const px = (pt.x / inputW) * pW;
+                const py = (pt.y / inputH) * pH;
+
+                if (i === 0) previewCtx.moveTo(px, py);
+                else previewCtx.lineTo(px, py);
+            }
+            previewCtx.stroke();
+        }
+
+        animate();
+    </script>
+</body>
+</html>
+

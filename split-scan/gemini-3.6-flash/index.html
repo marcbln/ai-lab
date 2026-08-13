@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Slit-Scan Image Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d0d0d;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: #fff;
+        }
+        /* Accumulated Slit-Scan Display Canvas */
+        #output-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        /* PIP Preview Window (Bottom Left) */
+        #preview-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 220px;
+            height: 160px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+        #preview-header {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 5px 8px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+            color: #aaa;
+        }
+        #preview-canvas {
+            width: 100%;
+            height: calc(100% - 22px);
+            object-fit: contain;
+        }
+        /* File Input Hidden */
+        #file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Main Slit-Scan Output Canvas -->
+    <canvas id="output-canvas"></canvas>
+
+    <!-- PIP Preview for Live Source & Current Slit Mask -->
+    <div id="preview-container">
+        <div id="preview-header">Input Feed & Active Slit</div>
+        <canvas id="preview-canvas"></canvas>
+    </div>
+
+    <input type="file" id="file-input" accept="image/*,video/*">
+
+    <!-- CDNs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+
+    <script>
+        // --- 1. Offscreen Input Canvas & Op-Art Shader Generator ---
+        const inputWidth = 1024;
+        const inputHeight = 1024;
+
+        const inputCanvas = document.createElement('canvas');
+        inputCanvas.width = inputWidth;
+        inputCanvas.height = inputHeight;
+
+        // Three.js Setup for Procedural Shader Input
+        const renderer = new THREE.WebGLRenderer({ canvas: inputCanvas, antialias: true });
+        renderer.setSize(inputWidth, inputHeight);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+        const fragmentShader = `
+            uniform vec2 u_resolution;
+            uniform float u_time;
+            uniform int u_mode;
+            
+            float aaStep(float threshold, float value) {
+                float afwidth = length(vec2(dFdx(value), dFdy(value))) * 0.7071;
+                return smoothstep(threshold - afwidth, threshold + afwidth, value);
+            }
+
+            void main() {
+                vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.x, u_resolution.y);
+                float val = 0.0;
+                
+                if (u_mode == 0) { // Wavy Terrain
+                    float w = sin(uv.x * 10.0 + u_time * 2.0) * 0.2;
+                    val = aaStep(0.0, sin((uv.y + w) * 30.0));
+                } else if (u_mode == 1) { // Concentric Tunnel
+                    float r = length(uv);
+                    float a = atan(uv.y, uv.x);
+                    val = aaStep(0.0, sin(r * 40.0 - u_time * 4.0 + a * 3.0));
+                } else if (u_mode == 2) { // Optical Checkerboard
+                    vec2 p = uv * 12.0 + sin(uv.yx * 3.0 + u_time * 2.0) * 0.8;
+                    vec2 check = floor(p);
+                    val = mod(check.x + check.y, 2.0);
+                } else if (u_mode == 3) { // Vertical Ripples
+                    float rip = sin(uv.y * 12.0 - u_time * 3.0) * 0.15;
+                    val = aaStep(0.0, sin((uv.x + rip) * 40.0));
+                }
+                
+                gl_FragColor = vec4(vec3(val), 1.0);
+            }
+        `;
+
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2(inputWidth, inputHeight) },
+            u_time: { value: 0 },
+            u_mode: { value: 1 } // Tunnel default
+        };
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: `void main() { gl_Position = vec4(position, 1.0); }`,
+            fragmentShader,
+            uniforms
+        });
+
+        const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+        scene.add(quad);
+
+        // Media Video/Image Input Handling
+        let userVideo = null;
+        let userImage = null;
+        let inputType = 'shader';
+
+        // --- 2. Main & Offscreen Buffer Canvases ---
+        const outputCanvas = document.getElementById('output-canvas');
+        const outputCtx = outputCanvas.getContext('2d');
+
+        const previewCanvas = document.getElementById('preview-canvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // Offscreen buffers for mask-slice compositing
+        const maskCanvas = document.createElement('canvas');
+        const maskCtx = maskCanvas.getContext('2d');
+
+        const sliceCanvas = document.createElement('canvas');
+        const sliceCtx = sliceCanvas.getContext('2d');
+
+        function resizeOutput() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            outputCanvas.width = w;
+            outputCanvas.height = h;
+            maskCanvas.width = w;
+            maskCanvas.height = h;
+            sliceCanvas.width = w;
+            sliceCanvas.height = h;
+
+            previewCanvas.width = 220;
+            previewCanvas.height = 138;
+            clearOutput();
+        }
+        window.addEventListener('resize', resizeOutput);
+
+        function clearOutput() {
+            outputCtx.fillStyle = '#000000';
+            outputCtx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+        }
+
+        // --- 3. GUI & Parameters ---
+        const params = {
+            source: 'Op-Art Shader',
+            shaderMode: 1,
+            uploadFile: () => document.getElementById('file-input').click(),
+            slitShape: 'Rotating Line',
+            thickness: 8,
+            rotationSpeed: 1.0,
+            travelSpeed: 0.8,
+            scaleSpeed: 1.2,
+            pause: false,
+            clearCanvas: () => clearOutput(),
+            downloadPNG: () => exportImage()
+        };
+
+        // --- 4. Slit Mask Drawing Function ---
+        function drawSlitMask(ctx, t, w, h, isPreview = false) {
+            const cx = w / 2 + Math.sin(t * params.travelSpeed * 0.7) * (w * 0.35);
+            const cy = h / 2 + Math.cos(t * params.travelSpeed * 0.5) * (h * 0.35);
+            const angle = t * params.rotationSpeed;
+            const thick = isPreview ? Math.max(2, params.thickness * (w / outputCanvas.width)) : params.thickness;
+
+            ctx.lineWidth = thick;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            const path = new Path2D();
+
+            if (params.slitShape === 'Rotating Line') {
+                const len = Math.max(w, h) * 1.5;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+
+                path.moveTo(cx - cosA * len, cy - sinA * len);
+                path.lineTo(cx + cosA * len, cy + sinA * len);
+                ctx.stroke(path);
+
+            } else if (params.slitShape === 'Expanding Ring (Circle)') {
+                const baseR = Math.min(w, h) * 0.35;
+                const r = baseR * (0.5 + 0.5 * Math.sin(t * params.scaleSpeed));
+                path.arc(cx, cy, Math.max(1, r), 0, Math.PI * 2);
+                ctx.stroke(path);
+
+            } else if (params.slitShape === 'Moving Polyline') {
+                const points = 5;
+                const r = (Math.min(w, h) * 0.25) + Math.sin(t * params.scaleSpeed) * (Math.min(w, h) * 0.1);
+
+                for (let i = 0; i < points; i++) {
+                    const a = angle + (i * Math.PI * 2) / points;
+                    const px = cx + Math.cos(a * 2.0) * r;
+                    const py = cy + Math.sin(a * 1.5) * r;
+                    if (i === 0) path.moveTo(px, py);
+                    else path.lineTo(px, py);
+                }
+                ctx.stroke(path);
+
+            } else if (params.slitShape === 'Animated Spline') {
+                const r = Math.max(w, h) * 0.4;
+                const p1x = cx - Math.cos(angle) * r;
+                const p1y = cy - Math.sin(angle) * r;
+                const p2x = cx + Math.cos(angle) * r;
+                const p2y = cy + Math.sin(angle) * r;
+
+                const cp1x = cx + Math.sin(t * 2.0) * (w * 0.3);
+                const cp1y = cy + Math.cos(t * 1.5) * (h * 0.3);
+                const cp2x = cx - Math.sin(t * 1.8) * (w * 0.3);
+                const cp2y = cy - Math.cos(t * 2.2) * (h * 0.3);
+
+                path.moveTo(p1x, p1y);
+                path.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2x, p2y);
+                ctx.stroke(path);
+            }
+        }
+
+        // --- 5. File Upload Logic ---
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const url = URL.createObjectURL(file);
+            if (file.type.startsWith('video/')) {
+                if (userVideo) userVideo.pause();
+                userVideo = document.createElement('video');
+                userVideo.src = url;
+                userVideo.loop = true;
+                userVideo.muted = true;
+                userVideo.play();
+                inputType = 'video';
+                params.source = 'Uploaded Video / Image';
+            } else if (file.type.startsWith('image/')) {
+                userImage = new Image();
+                userImage.onload = () => {
+                    inputType = 'image';
+                    params.source = 'Uploaded Video / Image';
+                };
+                userImage.src = url;
+            }
+            clearOutput();
+        });
+
+        // --- 6. GUI Controls ---
+        const gui = new lil.GUI({ title: 'Slit-Scan Controls' });
+
+        gui.add(params, 'source', ['Op-Art Shader', 'Uploaded Video / Image']).name('Input Source').onChange(val => {
+            if (val === 'Uploaded Video / Image') {
+                params.uploadFile();
+            } else {
+                inputType = 'shader';
+                clearOutput();
+            }
+        });
+
+        gui.add(params, 'shaderMode', { 'Wavy Terrain': 0, 'Tunnel': 1, 'Checkerboard': 2, 'Ripples': 3 }).name('Shader Pattern').onChange(v => {
+            uniforms.u_mode.value = v;
+            clearOutput();
+        });
+
+        gui.add(params, 'uploadFile').name('📁 Upload Custom File');
+
+        gui.add(params, 'slitShape', [
+            'Rotating Line',
+            'Expanding Ring (Circle)',
+            'Moving Polyline',
+            'Animated Spline'
+        ]).name('Slit Shape').onChange(() => clearOutput());
+
+        gui.add(params, 'thickness', 1, 40, 1).name('Slit Width (px)');
+        gui.add(params, 'rotationSpeed', 0.0, 3.0, 0.05).name('Rotation Speed');
+        gui.add(params, 'travelSpeed', 0.0, 3.0, 0.05).name('Move Speed');
+        gui.add(params, 'scaleSpeed', 0.0, 3.0, 0.05).name('Pulse Speed');
+
+        gui.add(params, 'pause').name('Pause Accumulation');
+        gui.add(params, 'clearCanvas').name('🗑️ Clear Canvas');
+        gui.add(params, 'downloadPNG').name('💾 Export Image (PNG)');
+
+        function exportImage() {
+            const link = document.createElement('a');
+            link.download = `slitscan_${Date.now()}.png`;
+            link.href = outputCanvas.toDataURL();
+            link.click();
+        }
+
+        // --- 7. Main Loop ---
+        const clock = new THREE.Clock();
+        resizeOutput();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsedTime = clock.getElapsedTime();
+
+            // 1. Render Source Frame
+            let activeSourceCanvas;
+            if (inputType === 'shader') {
+                uniforms.u_time.value = elapsedTime;
+                renderer.render(scene, camera);
+                activeSourceCanvas = inputCanvas;
+            } else if (inputType === 'video' && userVideo && userVideo.readyState >= 2) {
+                activeSourceCanvas = userVideo;
+            } else if (inputType === 'image' && userImage) {
+                activeSourceCanvas = userImage;
+            } else {
+                activeSourceCanvas = inputCanvas;
+            }
+
+            if (!params.pause) {
+                const outW = outputCanvas.width;
+                const outH = outputCanvas.height;
+
+                // 2A. Render Mask
+                maskCtx.clearRect(0, 0, outW, outH);
+                maskCtx.strokeStyle = '#ffffff';
+                maskCtx.fillStyle = '#ffffff';
+                drawSlitMask(maskCtx, elapsedTime, outW, outH, false);
+
+                // 2B. Mask the Active Input Frame onto Slice Buffer
+                sliceCtx.clearRect(0, 0, outW, outH);
+                sliceCtx.globalCompositeOperation = 'source-over';
+                sliceCtx.drawImage(activeSourceCanvas, 0, 0, outW, outH);
+                sliceCtx.globalCompositeOperation = 'destination-in';
+                sliceCtx.drawImage(maskCanvas, 0, 0);
+
+                // 2C. Accumulate Slice onto Main Screen
+                outputCtx.globalCompositeOperation = 'source-over';
+                outputCtx.drawImage(sliceCanvas, 0, 0);
+            }
+
+            // 3. Update Preview Box (Bottom Left)
+            const pW = previewCanvas.width;
+            const pH = previewCanvas.height;
+            previewCtx.clearRect(0, 0, pW, pH);
+            previewCtx.drawImage(activeSourceCanvas, 0, 0, pW, pH);
+
+            previewCtx.strokeStyle = '#ff0055';
+            previewCtx.fillStyle = '#ff0055';
+            drawSlitMask(previewCtx, elapsedTime, pW, pH, true);
+        }
+
+        animate();
+    </script>
+</body>
+</html>

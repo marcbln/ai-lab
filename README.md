@@ -22,6 +22,7 @@ Planned attractions (complete list as ideas — nothing more):
 - [ ] Geisterbahn (haunted house ride)
 - [ ] Tunnel optics like in *2001: A Space Odyssey* (slit-scan effect)
 - [ ] Slit-scan image generator — input an image or video, output with a moving (rotating, resizing) slit
+    - instead of a slit (line) we could also try with Polylines (open or closed), Splines (open or closed), Circle (changing in size and moving), etc...
 
 ## How it works
 
