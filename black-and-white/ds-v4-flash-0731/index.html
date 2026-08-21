@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MONO — 3D Op-Art Studio</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        #webgl-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: grab;
+        }
+        #webgl-canvas.dragging {
+            cursor: grabbing;
+        }
+        #title-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 13px;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            user-select: none;
+            pointer-events: none;
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+        }
+        #hint-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.78);
+            padding: 12px 18px;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border: 1px solid #444;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+            user-select: none;
+            line-height: 1.9;
+        }
+        #hint-overlay b {
+            color: #fff;
+            border: 1px solid #666;
+            padding: 1px 5px;
+            border-radius: 2px;
+            font-weight: normal;
+        }
+
+        /* Monochrome lil-gui theme */
+        .lil-gui {
+            --background-color: rgba(8, 8, 8, 0.92);
+            --title-background-color: #000;
+            --title-text-color: #fff;
+            --widget-color: #141414;
+            --focus-color: #fff;
+            --number-color: #fff;
+            --string-color: #fff;
+            --font-family: 'Courier New', Courier, monospace;
+            --font-size: 11px;
+            --input-background-color: #0a0a0a;
+            --input-color: #fff;
+            --border-color: #2a2a2a;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="webgl-canvas"></canvas>
+    <div id="title-overlay">MONO &bull; 3D Op-Art Studio</div>
+    <div id="hint-overlay">
+        <b>drag</b> orbit &nbsp; <b>scroll</b> zoom &nbsp; <b>1&ndash;7</b> effects<br>
+        <b>space</b> auto-rotate &nbsp; <b>R</b> reset
+    </div>
+
+    <!-- CDNs for Three.js and lil-gui -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.18"></script>
+
+    <script>
+        // ============================================================
+        //  Fragment shader — raymarched signed-distance-field scenes,
+        //  rendered as pure black & white with op-art contour banding.
+        // ============================================================
+        const fragmentShader = `
+            precision highp float;
+
+            uniform vec2  u_resolution;
+            uniform float u_time;
+            uniform vec3  u_eye;
+            uniform vec3  u_forward;
+            uniform vec3  u_right;
+            uniform vec3  u_up;
+            uniform vec3  u_mouse3;   // cursor projected into 3D space
+            uniform int   u_mode;
+            uniform float u_speed;
+            uniform float u_scale;
+            uniform float u_distortion;
+            uniform float u_bands;    // posterize levels (contour density)
+            uniform float u_mousePow;
+
+            #define MAX_STEPS 96
+            #define MAX_DIST  26.0
+
+            // --- Math helpers -------------------------------------------
+            mat2 rot2(float a) {
+                float c = cos(a), s = sin(a);
+                return mat2(c, -s, s, c);
+            }
+            mat3 rotX(float a) {
+                float c = cos(a), s = sin(a);
+                return mat3(1.0, 0.0, 0.0,  0.0, c, s,  0.0, -s, c);
+            }
+            mat3 rotY(float a) {
+                float c = cos(a), s = sin(a);
+                return mat3(c, 0.0, -s,  0.0, 1.0, 0.0,  s, 0.0, c);
+            }
+            mat3 rotZ(float a) {
+                float c = cos(a), s = sin(a);
+                return mat3(c, s, 0.0,  -s, c, 0.0,  0.0, 0.0, 1.0);
+            }
+
+            // --- SDF primitives ------------------------------------------
+            float sdSphere(vec3 p, float r) { return length(p) - r; }
+
+            float sdBox(vec3 p, vec3 b) {
+                vec3 q = abs(p) - b;
+                return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+            }
+
+            float sdTorus(vec3 p, vec2 t) {
+                vec2 q = vec2(length(p.xz) - t.x, p.y);
+                return length(q) - t.y;
+            }
+
+            float smin(float a, float b, float k) {
+                float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+                return mix(b, a, h) - k * h * (1.0 - h);
+            }
+
+            float hash12(vec2 p) {
+                vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+                p3 += dot(p3, p3.yzx + 33.33);
+                return fract((p3.x + p3.y) * p3.z);
+            }
+
+            // --- Scene: pick the active SDF by u_mode ---------------------
+            float map(vec3 p) {
+                float t = u_time * u_speed;
+
+                if (u_mode == 0) {
+                    // Wave Terrain — flowing heightfield
+                    float h = sin(p.x * 1.4 * u_scale + t) * 0.35;
+                    h += cos(p.z * 1.1 * u_scale - t * 0.7) * 0.25;
+                    h += sin((p.x + p.z) * 0.6 * u_scale + t * 0.4) * 0.15;
+                    float md = length(p.xz - u_mouse3.xz);
+                    h += sin(md * 3.0 - t * 4.0) * exp(-md * 1.8) * u_mousePow * 0.6;
+                    return p.y - h * u_distortion;
+                }
+
+                if (u_mode == 1) {
+                    // Ring Tunnel — ribbed tube, rings scrolling past
+                    float z = p.z - t * 2.5;
+                    float zc = clamp(z, -6.5, 6.5);
+                    vec2 bend = vec2(sin(z * 0.5), cos(z * 0.35)) * 0.45 * u_distortion;
+                    bend += u_mouse3.xy * 0.4 * u_mousePow;
+                    float R = 1.0 + 0.2 * sin(z * 2.0 * u_scale);
+                    return length(vec3(p.xy - bend, z - zc)) - R;
+                }
+
+                if (u_mode == 2) {
+                    // Twisted Ribbon — torus with a twist winding along it
+                    p = rotY(t * 0.4) * p;
+                    float a = p.x * (0.9 * u_scale + u_distortion * 0.5);
+                    p.yz = rot2(a) * p.yz;
+                    return sdTorus(p, vec2(1.15, 0.18));
+                }
+
+                if (u_mode == 3) {
+                    // Double Helix — DNA-style twin ribbons
+                    p.xz -= u_mouse3.xz * 0.4 * u_mousePow;
+                    float a = p.y * 1.1 * u_scale + t;
+                    vec2 c1 = 1.15 * vec2(cos(a), sin(a));
+                    vec2 c2 = -c1;
+                    float d1 = length(vec2(p.x, p.z) - c1) - 0.16;
+                    float d2 = length(vec2(p.x, p.z) - c2) - 0.16;
+                    return min(d1, d2);
+                }
+
+                if (u_mode == 4) {
+                    // Pillar City — blocks that morph between heights
+                    float cell = 1.35 / u_scale;
+                    vec2 id = floor(p.xz / cell);
+                    float h = 0.45 + 1.1 * hash12(id + floor(t * 0.35));
+                    vec2 g = fract(p.xz / cell) - 0.5;
+                    vec3 q = vec3(g.x * cell, p.y - h * 0.5, g.y * cell);
+                    float d = sdBox(q, vec3(0.42, h * 0.5, 0.42));
+                    return min(d, p.y); // ground plane
+                }
+
+                if (u_mode == 5) {
+                    // Metaballs — drifting blobby cluster, one follows cursor
+                    float d = 1e9;
+                    for (int i = 0; i < 5; i++) {
+                        float fi = float(i);
+                        vec3 c = 1.35 * u_scale * vec3(
+                            cos(t * 0.5 + fi * 1.7),
+                            sin(t * 0.6 + fi * 2.1),
+                            cos(t * 0.45 + fi * 1.3)
+                        );
+                        if (fi < 0.5) c = u_mouse3 + vec3(0.0, sin(t * 0.7) * 0.4, 0.0);
+                        d = smin(d, sdSphere(p - c, 0.62 * u_distortion), 0.5);
+                    }
+                    return d;
+                }
+
+                // Gyroscope Rings — three nested rotating tori
+                float d = 1e9;
+                vec3 q;
+                q = rotY(t * 0.8) * p;                     d = min(d, sdTorus(q, vec2(1.18 * u_scale, 0.055)));
+                q = rotX(t * 0.7) * rotZ(t * 0.6) * p;     d = min(d, sdTorus(q, vec2(0.82 * u_scale, 0.05)));
+                q = rotZ(t * 0.5) * rotX(t * 0.9) * p;     d = min(d, sdTorus(q, vec2(0.46 * u_scale, 0.045)));
+                return d;
+            }
+
+            // --- Raymarching -----------------------------------------------
+            float march(vec3 ro, vec3 rd) {
+                float t = 0.0;
+                for (int i = 0; i < MAX_STEPS; i++) {
+                    if (t > MAX_DIST) return -1.0;
+                    float d = map(ro + rd * t);
+                    if (d < 0.0004 + t * 0.0011) return t;
+                    t += d;
+                }
+                return -1.0;
+            }
+
+            vec3 calcNormal(vec3 p, float k) {
+                vec2 e = vec2(1.0, -1.0) * k;
+                return normalize(
+                    e.xyy * map(p + e.xyy) +
+                    e.yyx * map(p + e.yyx) +
+                    e.yxy * map(p + e.yxy) +
+                    e.xxx * map(p + e.xxx));
+            }
+
+            // --- Main -------------------------------------------------------
+            void main() {
+                vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution.xy) / min(u_resolution.x, u_resolution.y);
+                vec3 rd = normalize(u_forward + uv.x * u_right * 0.9 + uv.y * u_up * 0.9);
+
+                float col = 0.0;
+                float t = march(u_eye, rd);
+                if (t > 0.0) {
+                    vec3 p = u_eye + rd * t;
+                    vec3 n = calcNormal(p, 0.0015 + t * 0.001);
+
+                    vec3 lig = normalize(vec3(0.6, 0.85, 0.4));
+                    float dif = clamp(dot(n, lig), 0.0, 1.0);
+                    float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0) * 0.7;
+                    float shade = 0.12 + dif * 1.05 + rim;
+
+                    // Op-art contour banding: brightness posterized into
+                    // alternating black/white stripes, antialiased at edges.
+                    float stripes = mod(shade * u_bands, 2.0);
+                    float af = fwidth(shade) * u_bands * 1.5 + 0.004;
+                    col = smoothstep(1.0 - af, 1.0 + af, stripes);
+                }
+
+                gl_FragColor = vec4(vec3(col), 1.0);
+            }
+        `;
+
+        const vertexShader = `
+            void main() {
+                gl_Position = vec4(position, 1.0);
+            }
+        `;
+
+        // ============================================================
+        //  Three.js setup — a fullscreen quad carrying the shader
+        // ============================================================
+        const canvas = document.getElementById('webgl-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+        const uniforms = {
+            u_resolution: { value: new THREE.Vector2() },
+            u_time:       { value: 0 },
+            u_eye:        { value: new THREE.Vector3() },
+            u_forward:    { value: new THREE.Vector3(0, 0, -1) },
+            u_right:      { value: new THREE.Vector3(1, 0, 0) },
+            u_up:         { value: new THREE.Vector3(0, 1, 0) },
+            u_mouse3:     { value: new THREE.Vector3() },
+            u_mode:       { value: 0 },
+            u_speed:      { value: 1.0 },
+            u_scale:      { value: 1.0 },
+            u_distortion: { value: 1.0 },
+            u_bands:      { value: 4.0 },
+            u_mousePow:   { value: 1.0 }
+        };
+
+        const material = new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms });
+        scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material));
+
+        // ============================================================
+        //  Camera — spherical orbit around the scene origin
+        // ============================================================
+        const cam = { yaw: 0.55, pitch: 0.55, dist: 5.0, target: new THREE.Vector3(0, 0, 0) };
+        let dragging = false;
+        let lastPointerX = 0;
+        let lastPointerY = 0;
+
+        // Per-effect camera presets, applied when switching effects
+        const CAM_PRESETS = {
+            'Wave Terrain':    { yaw: 0.55, pitch: 0.55, dist: 5.0 },
+            'Fly Tunnel':      { yaw: 0.6,  pitch: 0.3,  dist: 6.5 },
+            'Twisted Ribbon':  { yaw: 0.7,  pitch: 0.35, dist: 4.4 },
+            'Double Helix':    { yaw: 0.45, pitch: 0.2,  dist: 5.4 },
+            'Pillar City':     { yaw: 0.55, pitch: 0.5,  dist: 6.0 },
+            'Metaballs':       { yaw: 0.7,  pitch: 0.25, dist: 5.2 },
+            'Gyroscope Rings': { yaw: 0.6,  pitch: 0.3,  dist: 4.6 }
+        };
+
+        // ============================================================
+        //  Interaction — pointer orbit, wheel zoom, hover 3D cursor
+        // ============================================================
+        const targetMouse = new THREE.Vector2(0, 0);   // hover position (ndc)
+        const currentMouse = new THREE.Vector2(0, 0);  // smoothed
+
+        function onResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            renderer.setSize(width, height);
+            uniforms.u_resolution.value.set(width, height);
+        }
+        window.addEventListener('resize', onResize);
+        onResize();
+
+        canvas.addEventListener('pointerdown', (e) => {
+            dragging = true;
+            lastPointerX = e.clientX;
+            lastPointerY = e.clientY;
+            canvas.setPointerCapture(e.pointerId);
+            canvas.classList.add('dragging');
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            // Hover position always tracked (ndc, y-up)
+            targetMouse.set(
+                (e.clientX / window.innerWidth) * 2 - 1,
+                -(e.clientY / window.innerHeight) * 2 + 1
+            );
+            if (dragging) {
+                const dx = e.clientX - lastPointerX;
+                const dy = e.clientY - lastPointerY;
+                cam.yaw -= dx * 0.005;
+                cam.pitch = THREE.MathUtils.clamp(cam.pitch - dy * 0.005, -1.15, 1.15);
+                lastPointerX = e.clientX;
+                lastPointerY = e.clientY;
+            }
+        });
+
+        const endDrag = () => {
+            dragging = false;
+            canvas.classList.remove('dragging');
+        };
+        canvas.addEventListener('pointerup', endDrag);
+        canvas.addEventListener('pointercancel', endDrag);
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            cam.dist = THREE.MathUtils.clamp(cam.dist * (1 + e.deltaY * 0.001), 2.2, 9.0);
+        }, { passive: false });
+
+        // ============================================================
+        //  GUI controls
+        // ============================================================
+        const gui = new lil.GUI({ title: 'Parameters' });
+
+        const EFFECTS = [
+            'Wave Terrain',
+            'Fly Tunnel',
+            'Twisted Ribbon',
+            'Double Helix',
+            'Pillar City',
+            'Metaballs',
+            'Gyroscope Rings'
+        ];
+
+        const params = {
+            Effect: 'Wave Terrain',
+            Speed: 1.0,
+            Scale: 1.0,
+            Distortion: 1.0,
+            Bands: 4,
+            'Mouse Force': 1.0,
+            'Auto Rotate': true,
+            Reset: () => {
+                params.Speed = 1.0;
+                params.Scale = 1.0;
+                params.Distortion = 1.0;
+                params.Bands = 4;
+                params['Mouse Force'] = 1.0;
+                params['Auto Rotate'] = true;
+                uniforms.u_speed.value = 1.0;
+                uniforms.u_scale.value = 1.0;
+                uniforms.u_distortion.value = 1.0;
+                uniforms.u_bands.value = 4.0;
+                uniforms.u_mousePow.value = 1.0;
+                gui.controllers.forEach(c => c.updateDisplay());
+            }
+        };
+
+        function setEffect(name) {
+            params.Effect = name;
+            uniforms.u_mode.value = EFFECTS.indexOf(name);
+            const preset = CAM_PRESETS[name];
+            if (preset) {
+                cam.yaw = preset.yaw;
+                cam.pitch = preset.pitch;
+                cam.dist = preset.dist;
+            }
+            effectController.updateDisplay();
+        }
+
+        const effectController = gui.add(params, 'Effect', EFFECTS)
+            .onChange(setEffect);
+        gui.add(params, 'Speed', 0.0, 3.0, 0.01).onChange(v => uniforms.u_speed.value = v);
+        gui.add(params, 'Scale', 0.2, 3.0, 0.01).onChange(v => uniforms.u_scale.value = v);
+        gui.add(params, 'Distortion', 0.0, 3.0, 0.01).onChange(v => uniforms.u_distortion.value = v);
+        gui.add(params, 'Bands', 2, 12, 1).onChange(v => uniforms.u_bands.value = v);
+        gui.add(params, 'Mouse Force', 0.0, 2.0, 0.01).onChange(v => uniforms.u_mousePow.value = v);
+        gui.add(params, 'Auto Rotate');
+        gui.add(params, 'Reset');
+
+        // ============================================================
+        //  Keyboard shortcuts: 1-7 effects, R reset, Space auto-rotate
+        // ============================================================
+        window.addEventListener('keydown', (e) => {
+            const idx = '1234567'.indexOf(e.key);
+            if (idx !== -1) {
+                setEffect(EFFECTS[idx]);
+            } else if (e.key === 'r' || e.key === 'R') {
+                params.Reset();
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                params['Auto Rotate'] = !params['Auto Rotate'];
+                gui.controllers.forEach(c => c.updateDisplay());
+            }
+        });
+
+        // ============================================================
+        //  Render loop
+        // ============================================================
+        const clock = new THREE.Clock();
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const vForward = new THREE.Vector3();
+        const vRight = new THREE.Vector3();
+        const vUp = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+            uniforms.u_time.value += dt;
+
+            if (params['Auto Rotate'] && !dragging) {
+                cam.yaw += dt * 0.15;
+            }
+
+            // Rebuild camera basis from orbit parameters
+            uniforms.u_eye.value.set(
+                cam.target.x + cam.dist * Math.cos(cam.pitch) * Math.sin(cam.yaw),
+                cam.target.y + cam.dist * Math.sin(cam.pitch),
+                cam.target.z + cam.dist * Math.cos(cam.pitch) * Math.cos(cam.yaw)
+            );
+            vForward.copy(cam.target).sub(uniforms.u_eye.value).normalize();
+            vRight.crossVectors(vForward, worldUp).normalize();
+            vUp.crossVectors(vRight, vForward).normalize();
+            uniforms.u_forward.value.copy(vForward);
+            uniforms.u_right.value.copy(vRight);
+            uniforms.u_up.value.copy(vUp);
+
+            // Cursor projected into 3D, a little in front of the camera
+            currentMouse.lerp(targetMouse, 0.08);
+            uniforms.u_mouse3.value
+                .copy(uniforms.u_eye.value)
+                .addScaledVector(vForward, 2.5)
+                .addScaledVector(vRight, currentMouse.x * 2.2)
+                .addScaledVector(vUp, currentMouse.y * 2.2);
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
